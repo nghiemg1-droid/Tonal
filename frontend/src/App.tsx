@@ -23,7 +23,7 @@ function App() {
         onClick={() => setLikes(likes + 1)}
         className="rounded-full bg-brand px-6 py-2 font-medium text-white hover:bg-brand-dark active:scale-95 transition"
       >
-        ♥ {likes} likes
+        ♥ {likes} 
       </button>
     </main>
   )
