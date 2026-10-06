@@ -1,4 +1,4 @@
-# Voice App (working title)
+# Tonal
 
 A social media app where posts, comments and direct messages are shared through **voice and images** instead of text.
 
