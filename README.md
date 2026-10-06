@@ -18,4 +18,30 @@ A social media app where posts, comments and direct messages are shared through 
 
 ## Status
 
-In development, week 1 of 8.
+In development, week 1 of 8 complete: sign up, log in and log out work end to end, and the FastAPI backend verifies Supabase login tokens.
+
+## Run locally
+
+### Frontend
+
+```bash
+cd frontend
+cp .env.example .env   # then fill in your Supabase values
+npm install
+npm run dev
+```
+
+Opens at http://localhost:5173
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # then fill in your Supabase values
+uvicorn app.main:app --reload --port 8000
+```
+
+API docs at http://localhost:8000/docs
