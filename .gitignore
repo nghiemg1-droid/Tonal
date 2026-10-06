@@ -1,0 +1,17 @@
+
+.env
+.env.*
+!.env.example
+
+# Node / frontend
+node_modules/
+dist/
+
+# Python / backend
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Mac
+.DS_Store
