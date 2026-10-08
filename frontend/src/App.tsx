@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import AuthForm from './components/AuthForm'
 import ThemeToggle from './components/ThemeToggle'
+import ProfileEditor from './components/ProfileEditor'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -59,10 +60,8 @@ function App() {
       </h1>
 
       {session ? (
-        <div className="flex flex-col items-center gap-3 animate-fade-up [animation-delay:150ms]">
-          <p className="text-muted">
-            Logged in as <span className="font-medium text-ink">{session.user.email}</span>
-          </p>
+        <div className="flex w-full flex-col items-center gap-3">
+          <ProfileEditor userId={session.user.id} />
           {backendMessage && <p className="text-sm text-muted">{backendMessage}</p>}
           <button
             onClick={() => supabase.auth.signOut()}
