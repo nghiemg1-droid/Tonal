@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import Avatar from './Avatar'
 
 type Result = {
   id: string
   username: string
   display_name: string | null
+  avatar_url: string | null
 }
 
 type Props = {
@@ -41,7 +43,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
     setError(null)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, username, display_name')
+      .select('id, username, display_name, avatar_url')
       .ilike('username', `%${clean}%`)
       .neq('id', userId)
       .order('username')
@@ -85,11 +87,11 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
       }
       return next
     })
-        onFollowChange?.()
+    onFollowChange?.()
   }
 
   return (
-    <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up [animation-delay:300ms]">
+    <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up">
       <h2 className="mb-3 text-xl font-bold text-ink">Find people</h2>
 
       <form onSubmit={handleSearch} className="flex gap-2">
@@ -119,9 +121,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
           const isFollowing = following.has(person.id)
           return (
             <li key={person.id} className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand font-bold text-white">
-                {name.charAt(0).toUpperCase()}
-              </div>
+              <Avatar name={name} url={person.avatar_url} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium text-ink">{name}</p>
                 <p className="truncate text-sm text-muted">@{person.username}</p>
