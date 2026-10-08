@@ -1,12 +1,131 @@
-export default function HomePage() {
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
+import { supabase } from '../lib/supabase'
+import PostCard from '../components/PostCard'
+import type { Post } from '../components/PostCard'
+
+const PAGE_SIZE = 10
+const POST_FIELDS =
+  'id, kind, media_path, duration_ms, created_at, author:profiles(id, username, display_name, avatar_url)'
+
+// Newest posts from these authors; "before" loads the next (older) page
+function fetchPosts(authorIds: string[], before?: string) {
+  let query = supabase
+    .from('posts')
+    .select(POST_FIELDS)
+    .in('author_id', authorIds)
+    .order('created_at', { ascending: false })
+    .limit(PAGE_SIZE)
+  if (before) query = query.lt('created_at', before)
+  return query
+}
+
+export default function HomePage({ userId }: { userId: string }) {
+  const [posts, setPosts] = useState<Post[]>([])
+  const [authorIds, setAuthorIds] = useState<string[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // First page: me + everyone I follow
+  useEffect(() => {
+    let cancelled = false
+
+    async function load() {
+      const { data: follows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', userId)
+      const ids = [userId, ...(follows ?? []).map((row) => row.following_id)]
+
+      const { data, error } = await fetchPosts(ids)
+      if (cancelled) return
+
+      if (error) setError(error.message)
+      else {
+        const rows = (data ?? []) as unknown as Post[]
+        setPosts(rows)
+        setHasMore(rows.length === PAGE_SIZE)
+      }
+      setAuthorIds(ids)
+      setLoading(false)
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  async function loadMore() {
+    if (!authorIds || posts.length === 0) return
+    setLoadingMore(true)
+
+    const oldest = posts[posts.length - 1].created_at
+    const { data, error } = await fetchPosts(authorIds, oldest)
+
+    setLoadingMore(false)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    const rows = (data ?? []) as unknown as Post[]
+    setPosts((prev) => [...prev, ...rows])
+    setHasMore(rows.length === PAGE_SIZE)
+  }
+
+  function removePost(id: string) {
+    setPosts((prev) => prev.filter((post) => post.id !== id))
+  }
+
+  if (loading) {
+    return <p className="pt-10 text-muted animate-pulse">Loading your feed...</p>
+  }
+
   return (
-    <div className="flex w-full flex-col items-center gap-3 pt-10 text-center animate-fade-up">
-      <h1 className="text-4xl font-bold tracking-tight text-ink">
-        Welcome to <span className="text-brand">Tonal</span>
-      </h1>
-      <p className="text-muted">
-        Your feed will appear here soon. Find people to follow in Search.
-      </p>
+    <div className="flex w-full flex-col items-center gap-4">
+      {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {posts.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 pt-10 text-center animate-fade-up">
+          <h1 className="text-3xl font-bold text-ink">Your feed is quiet</h1>
+          <p className="text-muted">Post your first voice or photo, or follow some people.</p>
+          <div className="flex gap-2">
+            <Link
+              to="/new"
+              className="rounded-full bg-brand px-5 py-2 font-medium text-white hover:bg-brand-dark active:scale-95 transition"
+            >
+              New post
+            </Link>
+            <Link
+              to="/search"
+              className="rounded-full border border-line px-5 py-2 text-ink hover:bg-card active:scale-95 transition"
+            >
+              Find people
+            </Link>
+          </div>
+        </div>
+      ) : (
+        posts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            isMine={post.author.id === userId}
+            onDeleted={removePost}
+          />
+        ))
+      )}
+
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="rounded-full border border-line px-5 py-2 text-ink hover:bg-card active:scale-95 disabled:opacity-50 transition"
+        >
+          {loadingMore ? 'Loading...' : 'Load more'}
+        </button>
+      )}
     </div>
   )
 }

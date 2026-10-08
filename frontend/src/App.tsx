@@ -61,7 +61,7 @@ function App() {
         <ThemeToggle />
         <main className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 px-4 pt-20 pb-28 md:pb-10">
           <Routes>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<HomePage userId={userId} />} />
             <Route path="/search" element={<SearchPage userId={userId} />} />
             <Route path="/new" element={<CreatePostPage userId={userId} />} />
             <Route path="/profile" element={<ProfilePage userId={userId} />} />
