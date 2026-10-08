@@ -27,6 +27,15 @@ function SearchIcon() {
   )
 }
 
+function NewIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <path d="M12 8v8M8 12h8" />
+    </svg>
+  )
+}
+
 function ProfileIcon() {
   return (
     <svg {...iconProps}>
@@ -39,6 +48,7 @@ function ProfileIcon() {
 const links = [
   { to: '/', label: 'Home', icon: <HomeIcon /> },
   { to: '/search', label: 'Search', icon: <SearchIcon /> },
+  { to: '/new', label: 'New', icon: <NewIcon /> },
   { to: '/profile', label: 'Profile', icon: <ProfileIcon /> },
 ]
 

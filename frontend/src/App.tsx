@@ -8,6 +8,7 @@ import NavBar from './components/NavBar'
 import HomePage from './pages/HomePage'
 import SearchPage from './pages/SearchPage'
 import ProfilePage from './pages/ProfilePage'
+import CreatePostPage from './pages/CreatePostPage'
 
 function App() {
   const [session, setSession] = useState<Session | null>(null)
@@ -62,6 +63,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/search" element={<SearchPage userId={userId} />} />
+            <Route path="/new" element={<CreatePostPage userId={userId} />} />
             <Route path="/profile" element={<ProfilePage userId={userId} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
