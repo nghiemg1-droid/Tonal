@@ -6,7 +6,9 @@ import type { Post } from '../components/PostCard'
 
 const PAGE_SIZE = 10
 const POST_FIELDS =
-  'id, kind, media_path, duration_ms, created_at, author:profiles(id, username, display_name, avatar_url)'
+  'id, kind, media_path, duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count)'
+// What the database sends back, before we add "did I like it?"
+type PostRow = Omit<Post, 'like_count' | 'liked_by_me'> & { likes: { count: number }[] }
 
 // Newest posts from these authors; "before" loads the next (older) page
 function fetchPosts(authorIds: string[], before?: string) {
@@ -18,6 +20,24 @@ function fetchPosts(authorIds: string[], before?: string) {
     .limit(PAGE_SIZE)
   if (before) query = query.lt('created_at', before)
   return query
+}
+
+// Add the like count and whether I liked each post
+async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post[]> {
+  if (rows.length === 0) return []
+
+  const { data } = await supabase
+    .from('likes')
+    .select('post_id')
+    .eq('user_id', userId)
+    .in('post_id', rows.map((row) => row.id))
+  const likedByMe = new Set((data ?? []).map((row) => row.post_id))
+
+  return rows.map(({ likes, ...post }) => ({
+    ...post,
+    like_count: likes[0]?.count ?? 0,
+    liked_by_me: likedByMe.has(post.id),
+  }))
 }
 
 export default function HomePage({ userId }: { userId: string }) {
@@ -40,16 +60,21 @@ export default function HomePage({ userId }: { userId: string }) {
       const ids = [userId, ...(follows ?? []).map((row) => row.following_id)]
 
       const { data, error } = await fetchPosts(ids)
-      if (cancelled) return
-
-      if (error) setError(error.message)
-      else {
-        const rows = (data ?? []) as unknown as Post[]
-        setPosts(rows)
-        setHasMore(rows.length === PAGE_SIZE)
+      if (error) {
+        if (!cancelled) setError(error.message)
+      } else {
+        const rows = (data ?? []) as unknown as PostRow[]
+        const withLikes = await addLikeInfo(rows, userId)
+        if (!cancelled) {
+          setPosts(withLikes)
+          setHasMore(rows.length === PAGE_SIZE)
+        }
       }
-      setAuthorIds(ids)
-      setLoading(false)
+
+      if (!cancelled) {
+        setAuthorIds(ids)
+        setLoading(false)
+      }
     }
 
     load()
@@ -65,14 +90,17 @@ export default function HomePage({ userId }: { userId: string }) {
     const oldest = posts[posts.length - 1].created_at
     const { data, error } = await fetchPosts(authorIds, oldest)
 
-    setLoadingMore(false)
     if (error) {
       setError(error.message)
+      setLoadingMore(false)
       return
     }
-    const rows = (data ?? []) as unknown as Post[]
-    setPosts((prev) => [...prev, ...rows])
+
+    const rows = (data ?? []) as unknown as PostRow[]
+    const withLikes = await addLikeInfo(rows, userId)
+    setPosts((prev) => [...prev, ...withLikes])
     setHasMore(rows.length === PAGE_SIZE)
+    setLoadingMore(false)
   }
 
   function removePost(id: string) {
@@ -108,12 +136,7 @@ export default function HomePage({ userId }: { userId: string }) {
         </div>
       ) : (
         posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            isMine={post.author.id === userId}
-            onDeleted={removePost}
-          />
+          <PostCard key={post.id} post={post} userId={userId} onDeleted={removePost} />
         ))
       )}
 

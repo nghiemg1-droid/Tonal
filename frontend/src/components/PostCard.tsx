@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar'
 import VoicePlayer from './VoicePlayer'
+import LikeButton from './LikeButton'
 
 export type Post = {
   id: string
@@ -9,6 +10,8 @@ export type Post = {
   media_path: string
   duration_ms: number | null
   created_at: string
+  like_count: number
+  liked_by_me: boolean
   author: {
     id: string
     username: string
@@ -31,14 +34,15 @@ function timeAgo(iso: string) {
 
 type Props = {
   post: Post
-  isMine: boolean
+  userId: string
   onDeleted: (id: string) => void
 }
 
-export default function PostCard({ post, isMine, onDeleted }: Props) {
+export default function PostCard({ post, userId, onDeleted }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isMine = post.author.id === userId
   const mediaUrl = supabase.storage.from('posts').getPublicUrl(post.media_path).data.publicUrl
   const name = post.author.display_name || post.author.username
 
@@ -90,6 +94,15 @@ export default function PostCard({ post, isMine, onDeleted }: Props) {
           className="max-h-144 w-full rounded-xl bg-page object-cover"
         />
       )}
+
+      <footer className="mt-2 flex items-center">
+        <LikeButton
+          postId={post.id}
+          userId={userId}
+          initialLiked={post.liked_by_me}
+          initialCount={post.like_count}
+        />
+      </footer>
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
     </article>
