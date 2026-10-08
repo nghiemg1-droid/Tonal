@@ -6,7 +6,7 @@ import type { Post } from '../components/PostCard'
 
 const PAGE_SIZE = 10
 const POST_FIELDS =
-  'id, kind, media_path, duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count)'
+  'id, kind, media_path, audio_path, duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count)'
 // What the database sends back, before we add "did I like it?"
 type PostRow = Omit<Post, 'like_count' | 'liked_by_me'> & { likes: { count: number }[] }
 

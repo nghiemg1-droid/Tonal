@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-
-// Only one voice plays at a time across the whole feed
-let currentlyPlaying: HTMLAudioElement | null = null
+import { playExclusive } from '../lib/playback'
 
 function formatTime(ms: number) {
   const seconds = Math.floor(ms / 1000)
@@ -29,9 +27,7 @@ export default function VoicePlayer({ src, durationMs }: Props) {
     if (!audio) return
 
     if (audio.paused) {
-      if (currentlyPlaying && currentlyPlaying !== audio) currentlyPlaying.pause()
-      currentlyPlaying = audio
-      audio.play().catch(() => setPlaying(false))
+      playExclusive(audio).catch(() => setPlaying(false))
     } else {
       audio.pause()
     }

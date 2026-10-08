@@ -14,11 +14,17 @@ function audioExtension(mime: string) {
   return 'webm'
 }
 
+// "audio/webm;codecs=opus" -> "audio/webm"
+function baseType(blob: Blob, fallback: string) {
+  return blob.type.split(';')[0] || fallback
+}
+
 export default function CreatePostPage({ userId }: { userId: string }) {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('voice')
   const [recording, setRecording] = useState<Recording | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imageAudio, setImageAudio] = useState<Recording | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,49 +58,62 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   async function handlePost() {
     setPosting(true)
     setError(null)
+    const uploaded: string[] = [] // so we can clean up if something fails
 
     try {
-      let blob: Blob
-      let contentType: string
-      let ext: string
+      let mainBlob: Blob
+      let mainType: string
+      let mainExt: string
+      let audioPath: string | null = null
       let durationMs: number | null = null
 
       if (mode === 'voice') {
         if (!recording) return
-        blob = recording.blob
-        contentType = blob.type.split(';')[0] || 'audio/webm' // "audio/webm;codecs=opus" -> "audio/webm"
-        ext = audioExtension(contentType)
+        mainBlob = recording.blob
+        mainType = baseType(mainBlob, 'audio/webm')
+        mainExt = audioExtension(mainType)
         durationMs = recording.durationMs
       } else {
         if (!imageFile) return
-        blob = await makePostImage(imageFile) // shrink + strip GPS
-        contentType = blob.type
-        ext = contentType === 'image/webp' ? 'webp' : 'jpg'
+        mainBlob = await makePostImage(imageFile) // shrink + strip GPS
+        mainType = mainBlob.type
+        mainExt = mainType === 'image/webp' ? 'webp' : 'jpg'
       }
 
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`
-
-      // 1. Upload the file into my own folder
-      const { error: uploadError } = await supabase.storage
+      // 1. Upload the main file (voice or photo)
+      const mainPath = `${userId}/${crypto.randomUUID()}.${mainExt}`
+      const { error: mainError } = await supabase.storage
         .from('posts')
-        .upload(path, blob, { contentType })
-      if (uploadError) throw new Error(uploadError.message)
+        .upload(mainPath, mainBlob, { contentType: mainType })
+      if (mainError) throw new Error(mainError.message)
+      uploaded.push(mainPath)
 
-      // 2. Save the post in the database
+      // 2. Photo with sound: upload the sound too
+      if (mode === 'image' && imageAudio) {
+        const audioType = baseType(imageAudio.blob, 'audio/webm')
+        audioPath = `${userId}/${crypto.randomUUID()}.${audioExtension(audioType)}`
+        const { error: audioError } = await supabase.storage
+          .from('posts')
+          .upload(audioPath, imageAudio.blob, { contentType: audioType })
+        if (audioError) throw new Error(audioError.message)
+        uploaded.push(audioPath)
+        durationMs = imageAudio.durationMs
+      }
+
+      // 3. Save the post in the database
       const { error: insertError } = await supabase.from('posts').insert({
         author_id: userId,
         kind: mode,
-        media_path: path,
+        media_path: mainPath,
+        audio_path: audioPath,
         duration_ms: durationMs,
       })
-      if (insertError) {
-        // Don't leave an orphan file behind if saving failed
-        await supabase.storage.from('posts').remove([path])
-        throw new Error(insertError.message)
-      }
+      if (insertError) throw new Error(insertError.message)
 
       navigate('/')
     } catch (err) {
+      // Don't leave orphan files behind if something failed
+      if (uploaded.length > 0) await supabase.storage.from('posts').remove(uploaded)
       setError(err instanceof Error ? err.message : 'Could not post')
     } finally {
       setPosting(false)
@@ -137,6 +156,13 @@ export default function CreatePostPage({ userId }: { userId: string }) {
               Choose another
               <input type="file" accept="image/*" onChange={handleImageChange} className="sr-only" />
             </label>
+
+            <div className="mt-2 w-full border-t border-line pt-4">
+              <p className="mb-3 text-center text-sm text-muted">
+                Add your voice or a song you made <span className="opacity-70">(optional)</span>
+              </p>
+              <VoiceRecorder onChange={setImageAudio} />
+            </div>
           </>
         ) : (
           <label className="flex h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line text-muted hover:border-brand hover:text-brand transition">

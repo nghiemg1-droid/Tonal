@@ -3,11 +3,12 @@ import { supabase } from '../lib/supabase'
 import Avatar from './Avatar'
 import VoicePlayer from './VoicePlayer'
 import LikeButton from './LikeButton'
-
+import ImageWithSound from './ImageWithSound'
 export type Post = {
   id: string
   kind: 'voice' | 'image'
   media_path: string
+  audio_path: string | null
   duration_ms: number | null
   created_at: string
   like_count: number
@@ -57,9 +58,8 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
       setDeleting(false)
       return
     }
-
-    // Remove the file too, so it doesn't waste storage
-    await supabase.storage.from('posts').remove([post.media_path])
+    const files = post.audio_path ? [post.media_path, post.audio_path] : [post.media_path]
+    await supabase.storage.from('posts').remove(files)
     onDeleted(post.id)
   }
 
@@ -86,6 +86,14 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
 
       {post.kind === 'voice' ? (
         <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />
+            
+      ) : post.audio_path ? (
+        <ImageWithSound
+          imageUrl={mediaUrl}
+          audioUrl={supabase.storage.from('posts').getPublicUrl(post.audio_path).data.publicUrl}
+          alt={`Photo by ${name}`}
+        />
+      
       ) : (
         <img
           src={mediaUrl}
