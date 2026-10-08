@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { makeAvatar } from '../lib/image'
+import Avatar from './Avatar'
 
 type Profile = {
   id: string
@@ -11,10 +13,11 @@ type Profile = {
 
 type Props = {
   userId: string
-    refreshKey?: number
+  refreshKey?: number
 }
 
 const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
+const PROFILE_FIELDS = 'id, username, display_name, avatar_url'
 
 export default function ProfileEditor({ userId, refreshKey }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -23,13 +26,14 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Load my profile
   useEffect(() => {
     supabase
       .from('profiles')
-      .select('id, username, display_name, avatar_url')
+      .select(PROFILE_FIELDS)
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
@@ -38,7 +42,7 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
       })
   }, [userId])
 
-  // Load follower / following counts (reloads when refreshKey changes)
+  // Load follower / following counts
   useEffect(() => {
     Promise.all([
       supabase
@@ -78,7 +82,7 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
       .from('profiles')
       .update({ username: cleanUsername, display_name: displayName.trim() || null })
       .eq('id', userId)
-      .select('id, username, display_name, avatar_url')
+      .select(PROFILE_FIELDS)
       .single()
 
     setSaving(false)
@@ -91,6 +95,57 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
 
     setProfile(data)
     setEditing(false)
+  }
+
+  async function handleAvatarChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow picking the same file again later
+    if (!file || !profile) return
+
+    if (!file.type.startsWith('image/')) {
+      setError('Please choose an image')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image is too large (max 10 MB)')
+      return
+    }
+
+    setUploading(true)
+    setError(null)
+
+    try {
+      // 1. Crop, shrink and strip EXIF in the browser
+      const blob = await makeAvatar(file)
+      const ext = blob.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${userId}/avatar-${Date.now()}.${ext}`
+
+      // 2. Upload to the avatars bucket, inside my own folder
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { contentType: blob.type })
+      if (uploadError) throw new Error(uploadError.message)
+
+      // 3. Save the public link on my profile
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      const { data, error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: urlData.publicUrl })
+        .eq('id', userId)
+        .select(PROFILE_FIELDS)
+        .single()
+      if (updateError) throw new Error(updateError.message)
+
+      // 4. Delete the old photo so it doesn't waste storage
+      const oldPath = profile.avatar_url?.split('/avatars/')[1]
+      if (oldPath) await supabase.storage.from('avatars').remove([oldPath])
+
+      setProfile(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
   }
 
   if (!profile) {
@@ -148,25 +203,47 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
           </div>
         </form>
       ) : (
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand text-2xl font-bold text-white">
-            {name.charAt(0).toUpperCase()}
+        <>
+          <div className="flex items-center gap-4">
+            {/* Tap the photo to change it */}
+            <label className="relative shrink-0 cursor-pointer" title="Change photo">
+              <Avatar name={name} url={profile.avatar_url} className="h-16 w-16 text-2xl" />
+              <span className="absolute -right-1 -bottom-1 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-card text-xs">
+                📷
+              </span>
+              {uploading && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-xs text-white">
+                  ...
+                </span>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                disabled={uploading}
+                className="sr-only"
+              />
+            </label>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-ink">{name}</p>
+              <p className="truncate text-sm text-muted">@{profile.username}</p>
+              <p className="mt-1 text-sm text-muted">
+                <span className="font-semibold text-ink">{counts.followers}</span> followers ·{' '}
+                <span className="font-semibold text-ink">{counts.following}</span> following
+              </p>
+            </div>
+
+            <button
+              onClick={startEditing}
+              className="rounded-full border border-line px-4 py-1.5 text-sm text-ink hover:bg-page active:scale-95 transition"
+            >
+              Edit
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-semibold text-ink">{name}</p>
-            <p className="truncate text-sm text-muted">@{profile.username}</p>
-            <p className="mt-1 text-sm text-muted">
-              <span className="font-semibold text-ink">{counts.followers}</span> followers ·{' '}
-              <span className="font-semibold text-ink">{counts.following}</span> following
-            </p>
-          </div>
-          <button
-            onClick={startEditing}
-            className="rounded-full border border-line px-4 py-1.5 text-sm text-ink hover:bg-page active:scale-95 transition"
-          >
-            Edit
-          </button>
-        </div>
+
+          {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+        </>
       )}
     </div>
   )
