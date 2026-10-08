@@ -9,10 +9,16 @@ type Profile = {
   avatar_url: string | null
 }
 
+type Props = {
+  userId: string
+    refreshKey?: number
+}
+
 const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
 
-export default function ProfileEditor({ userId }: { userId: string }) {
+export default function ProfileEditor({ userId, refreshKey }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [counts, setCounts] = useState({ followers: 0, following: 0 })
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -31,6 +37,22 @@ export default function ProfileEditor({ userId }: { userId: string }) {
         else setProfile(data)
       })
   }, [userId])
+
+  // Load follower / following counts (reloads when refreshKey changes)
+  useEffect(() => {
+    Promise.all([
+      supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('following_id', userId),
+      supabase
+        .from('follows')
+        .select('*', { count: 'exact', head: true })
+        .eq('follower_id', userId),
+    ]).then(([followers, following]) => {
+      setCounts({ followers: followers.count ?? 0, following: following.count ?? 0 })
+    })
+  }, [userId, refreshKey])
 
   function startEditing() {
     if (!profile) return
@@ -133,6 +155,10 @@ export default function ProfileEditor({ userId }: { userId: string }) {
           <div className="min-w-0 flex-1">
             <p className="truncate font-semibold text-ink">{name}</p>
             <p className="truncate text-sm text-muted">@{profile.username}</p>
+            <p className="mt-1 text-sm text-muted">
+              <span className="font-semibold text-ink">{counts.followers}</span> followers ·{' '}
+              <span className="font-semibold text-ink">{counts.following}</span> following
+            </p>
           </div>
           <button
             onClick={startEditing}
