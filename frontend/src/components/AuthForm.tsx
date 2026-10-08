@@ -23,12 +23,15 @@ export default function AuthForm() {
     setLoading(false)
   }
 
+  const inputClass =
+    'rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand'
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="w-full max-w-sm flex flex-col gap-3 rounded-2xl bg-white p-6 shadow-sm"
+      className="w-full max-w-sm flex flex-col gap-3 rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up [animation-delay:150ms]"
     >
-      <h2 className="text-2xl font-bold text-gray-900">
+      <h2 className="text-2xl font-bold text-ink">
         {mode === 'login' ? 'Log in' : 'Create account'}
       </h2>
 
@@ -38,7 +41,7 @@ export default function AuthForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required
-        className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+        className={inputClass}
       />
 
       <input
@@ -48,15 +51,15 @@ export default function AuthForm() {
         onChange={(e) => setPassword(e.target.value)}
         required
         minLength={6}
-        className="rounded-lg border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+        className={inputClass}
       />
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <button
         type="submit"
         disabled={loading}
-        className="rounded-full bg-brand py-2 font-medium text-white hover:bg-brand-dark disabled:opacity-50 transition"
+        className="rounded-full bg-brand py-2 font-medium text-white hover:bg-brand-dark active:scale-95 disabled:opacity-50 transition"
       >
         {loading ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Sign up'}
       </button>
@@ -64,7 +67,7 @@ export default function AuthForm() {
       <button
         type="button"
         onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-        className="text-sm text-gray-500 hover:text-brand"
+        className="text-sm text-muted hover:text-brand transition"
       >
         {mode === 'login'
           ? "Don't have an account? Sign up"

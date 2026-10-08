@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import AuthForm from './components/AuthForm'
+import ThemeToggle from './components/ThemeToggle'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -40,25 +41,32 @@ function App() {
       .catch(() => setBackendMessage('Could not reach the backend'))
   }, [session])
 
+  // Splash screen while we check the login
   if (loading) {
-    return <main className="min-h-screen bg-gray-50" />
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-page">
+        <span className="text-4xl font-bold text-brand animate-pulse">Tonal</span>
+      </main>
+    )
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-50 px-4">
-      <h1 className="text-5xl font-bold tracking-tight text-gray-900">
+    <main className="min-h-screen flex flex-col items-center justify-center gap-6 bg-page px-4">
+      <ThemeToggle />
+
+      <h1 className="text-5xl font-bold tracking-tight text-ink animate-fade-up">
         Welcome to <span className="text-brand">Tonal</span>
       </h1>
 
       {session ? (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-gray-600">
-            Logged in as <span className="font-medium">{session.user.email}</span>
+        <div className="flex flex-col items-center gap-3 animate-fade-up [animation-delay:150ms]">
+          <p className="text-muted">
+            Logged in as <span className="font-medium text-ink">{session.user.email}</span>
           </p>
-          {backendMessage && <p className="text-sm text-gray-500">{backendMessage}</p>}
+          {backendMessage && <p className="text-sm text-muted">{backendMessage}</p>}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="rounded-full border border-gray-300 px-5 py-2 text-gray-700 hover:bg-gray-100 transition"
+            className="rounded-full border border-line px-5 py-2 text-ink hover:bg-card active:scale-95 transition"
           >
             Log out
           </button>

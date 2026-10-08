@@ -1,7 +1,65 @@
 @import "tailwindcss";
 
-/* Màu thương hiệu Tonal — đổi ở đây là cả app đổi theo */
+/* Turn on dark mode when <html> has the class "dark" */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Brand colors — change here and the whole app follows */
 @theme {
   --color-brand: #f87171;
   --color-brand-dark: #ef4444;
+
+  --animate-fade-up: fade-up 0.5s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* Colors that change between light and dark mode */
+@theme inline {
+  --color-page: var(--page);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+}
+
+:root {
+  --page: #f9fafb;
+  --card: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+  --line: #d1d5db;
+}
+
+.dark {
+  --page: #0f0f13;
+  --card: #1a1a20;
+  --ink: #f3f4f6;
+  --muted: #9ca3af;
+  --line: #34343d;
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--page);
+  transition: background-color 0.3s ease;
+}
+
+/* Respect the "Reduce Motion" setting on iPhone / Mac */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
