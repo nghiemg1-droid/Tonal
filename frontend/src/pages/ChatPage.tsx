@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ChangeEvent, FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
 import { supabase } from '../lib/supabase'
-import { makePostImage } from '../lib/image'
+import { encodeCanvas, makePostImage } from '../lib/image'
 import { timeAgo } from '../lib/time'
 import { PERSON_FIELDS, personName } from '../lib/chat'
 import type { Person } from '../lib/chat'
@@ -13,15 +13,18 @@ import type { Member } from '../components/GroupInfo'
 import VoicePlayer from '../components/VoicePlayer'
 import VoiceRecorder from '../components/VoiceRecorder'
 import type { Recording } from '../components/VoiceRecorder'
+import DrawingPad from '../components/DrawingPad'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 type Message = {
   id: string
   conversation_id: string
   sender_id: string
-  kind: 'text' | 'voice' | 'image' | 'sticker'
+  kind: 'text' | 'voice' | 'image' | 'sticker' | 'drawing' | 'file'
   body: string | null
   media_path: string | null
   duration_ms: number | null
+  file_size: number | null
   reply_to_id: string | null
   deleted_at: string | null
   view_once: boolean
@@ -39,20 +42,43 @@ type Reaction = {
   emoji: string | null
 }
 
+type ChatMember = Member & { last_read_at: string }
+
 type Info = {
   id: string
   is_group: boolean
   name: string | null
-  members: Member[]
+  members: ChatMember[]
 }
 
 // message id -> (user id -> emoji)
 type ReactionMap = Record<string, Record<string, string>>
 
 const MESSAGE_FIELDS =
-  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, reply_to_id, deleted_at, view_once, created_at'
+  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, file_size, reply_to_id, deleted_at, view_once, created_at'
 const PAGE = 40
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
+const MAX_FILE = 10 * 1024 * 1024
+const FILE_TYPES = [
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]
+const FILE_ACCEPT = '.pdf,.txt,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx'
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 const STICKERS = ['🎉', '🔥', '🥳', '😍', '🤣', '😭', '🙏', '👏', '💯', '✨', '🎶', '🌹', '🐶', '🐱', '🍕', '☕']
 
 function audioExtension(mime: string) {
@@ -65,6 +91,8 @@ function preview(m: Message) {
   if (m.deleted_at) return 'Message unsent'
   if (m.kind === 'text' || m.kind === 'sticker') return m.body ?? ''
   if (m.kind === 'voice') return '🎙️ Voice message'
+  if (m.kind === 'drawing') return '✏️ Drawing'
+  if (m.kind === 'file') return `📎 ${m.body ?? 'File'}`
   return m.view_once ? '📸 View-once photo' : '📷 Photo'
 }
 
@@ -104,7 +132,13 @@ export default function ChatPage({ userId }: { userId: string }) {
 
   const [text, setText] = useState('')
   const [replyTo, setReplyTo] = useState<Message | null>(null)
-  const [panel, setPanel] = useState<'none' | 'stickers' | 'voice'>('none')
+  const [panel, setPanel] = useState<'none' | 'stickers' | 'voice' | 'drawing' | 'more'>('none')
+  const [drawing, setDrawing] = useState<HTMLCanvasElement | null>(null)
+  const [padKey, setPadKey] = useState(0) // changing it clears the drawing pad
+  const [typingIds, setTypingIds] = useState<string[]>([])
+  const channelRef = useRef<RealtimeChannel | null>(null)
+  const typingTimers = useRef<Record<string, number>>({})
+  const lastTypingSent = useRef(0)
   const [recording, setRecording] = useState<Recording | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [showInfo, setShowInfo] = useState(false)
@@ -140,12 +174,8 @@ export default function ChatPage({ userId }: { userId: string }) {
   }, [])
 
   const markRead = useCallback(async () => {
-    await supabase
-      .from('conversation_members')
-      .update({ last_read_at: new Date().toISOString() })
-      .eq('conversation_id', conversationId)
-      .eq('user_id', userId)
-  }, [conversationId, userId])
+    await supabase.rpc('mark_conversation_read', { conv: conversationId })
+  }, [conversationId])
 
   const addMessage = useCallback(
     (m: Message) => {
@@ -198,7 +228,7 @@ export default function ChatPage({ userId }: { userId: string }) {
     const { data, error } = await supabase
       .from('conversations')
       .select(
-        `id, is_group, name, members:conversation_members(user_id, role, profile:profiles(${PERSON_FIELDS}))`,
+        `id, is_group, name, members:conversation_members(user_id, role, last_read_at, profile:profiles(${PERSON_FIELDS}))`,
       )
       .eq('id', conversationId)
       .maybeSingle()
@@ -259,6 +289,7 @@ export default function ChatPage({ userId }: { userId: string }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter }, (payload) => {
         const m = payload.new as Message
         addMessage(m)
+        setTypingIds((prev) => prev.filter((x) => x !== m.sender_id))
         if (m.sender_id !== userId) markRead()
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter }, (payload) => {
@@ -279,9 +310,43 @@ export default function ChatPage({ userId }: { userId: string }) {
         { event: 'INSERT', schema: 'public', table: 'message_views', filter },
         (payload) => setViews((prev) => addView(prev, payload.new as View)),
       )
+      // "Seen": someone's last_read_at moved forward
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter },
+        (payload) => {
+          const row = payload.new as { user_id: string; last_read_at: string }
+          setInfo((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  members: prev.members.map((m) =>
+                    m.user_id === row.user_id ? { ...m, last_read_at: row.last_read_at } : m,
+                  ),
+                }
+              : prev,
+          )
+        },
+      )
+      // "Typing…": short-lived signals, never saved in the database
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        const id = (payload as { user_id?: string })?.user_id
+        if (!id || id === userId) return
+        setTypingIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+        window.clearTimeout(typingTimers.current[id])
+        typingTimers.current[id] = window.setTimeout(() => {
+          setTypingIds((prev) => prev.filter((x) => x !== id))
+        }, 3500)
+      })
       .subscribe()
 
+    channelRef.current = channel
+    const timers = typingTimers.current
+
     return () => {
+      channelRef.current = null
+      Object.values(timers).forEach((t) => window.clearTimeout(t))
+      setTypingIds([])
       supabase.removeChannel(channel)
     }
   }, [conversationId, userId, addMessage, markRead])
@@ -294,6 +359,23 @@ export default function ChatPage({ userId }: { userId: string }) {
     lastIdRef.current = last.id
     window.scrollTo({ top: document.body.scrollHeight, behavior: first ? 'auto' : 'smooth' })
   }, [messages])
+
+  // Coming back to this tab counts as reading
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') markRead()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [markRead])
+
+  function handleTyping(value: string) {
+    setText(value)
+    const now = Date.now()
+    if (!value.trim() || now - lastTypingSent.current < 2000) return
+    lastTypingSent.current = now
+    channelRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: userId } })
+  }
 
   // Preview of the photo you're about to send
   useEffect(() => {
@@ -397,6 +479,48 @@ export default function ChatPage({ userId }: { userId: string }) {
         throw err
       }
       setPendingPhoto(null)
+    })
+  }
+
+  function sendDrawing() {
+    const canvas = drawing
+    if (!canvas) return
+    send(async () => {
+      const blob = await encodeCanvas(canvas)
+      const path = await uploadFile(blob, blob.type, blob.type === 'image/webp' ? 'webp' : 'jpg')
+      try {
+        await insertMessage({ kind: 'drawing', media_path: path })
+      } catch (err) {
+        await supabase.storage.from('messages').remove([path])
+        throw err
+      }
+      setDrawing(null)
+      setPadKey((k) => k + 1)
+      setPanel('none')
+    })
+  }
+
+  function sendFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > MAX_FILE) {
+      setError('Files can be up to 10 MB.')
+      return
+    }
+    if (!FILE_TYPES.includes(file.type)) {
+      setError('This file type is not supported. Try PDF, Word, Excel, PowerPoint, TXT, CSV or ZIP.')
+      return
+    }
+    send(async () => {
+      const ext = (file.name.split('.').pop() ?? 'bin').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8) || 'bin'
+      const path = await uploadFile(file, file.type, ext)
+      try {
+        await insertMessage({ kind: 'file', media_path: path, body: file.name.slice(0, 200), file_size: file.size })
+      } catch (err) {
+        await supabase.storage.from('messages').remove([path])
+        throw err
+      }
     })
   }
 
@@ -518,8 +642,10 @@ export default function ChatPage({ userId }: { userId: string }) {
         : 'Tonal user'
     : ''
   const byId = new Map(messages.map((m) => [m.id, m]))
-  const iconButton =
-    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl hover:bg-page active:scale-90 disabled:opacity-40 transition'
+  // no display class here, so each button can choose flex / hidden
+  const iconBase =
+    'h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl hover:bg-page active:scale-90 disabled:opacity-40 transition'
+  const iconButton = `flex ${iconBase}`
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -627,9 +753,14 @@ export default function ChatPage({ userId }: { userId: string }) {
                         openedByMe={(views[m.id] ?? []).includes(userId)}
                         isGroup={!!info?.is_group}
                       />
-                    ) : m.kind === 'image' ? (
+                    ) : m.kind === 'image' || m.kind === 'drawing' ? (
                       url ? (
-                        <img src={url} alt="Photo" loading="lazy" className="max-h-80 rounded-2xl object-cover" />
+                        <img
+                          src={url}
+                          alt={m.kind === 'drawing' ? 'Drawing' : 'Photo'}
+                          loading="lazy"
+                          className={`max-h-80 rounded-2xl object-cover ${m.kind === 'drawing' ? 'w-56 border border-line bg-white' : ''}`}
+                        />
                       ) : (
                         <span className="block h-48 w-48 animate-pulse rounded-2xl bg-line" />
                       )
@@ -647,6 +778,36 @@ export default function ChatPage({ userId }: { userId: string }) {
                       <button
                         onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}
                         className="mt-0.5 text-xs text-muted hover:text-ink"
+                      >
+                        •••
+                      </button>
+                    </div>
+                  )}
+
+                  {!m.deleted_at && m.kind === 'file' && (
+                    <div className={`flex w-64 items-center gap-3 rounded-2xl px-3 py-2.5 ${bubbleBase}`}>
+                      <span className="text-2xl">📎</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{m.body}</p>
+                        <p className={`text-xs ${mine ? 'text-white/80' : 'text-muted'}`}>
+                          {m.file_size ? formatSize(m.file_size) : ''}
+                        </p>
+                      </div>
+                      {url && (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${m.body}`}
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${mine ? 'bg-white/20' : 'bg-page'}`}
+                        >
+                          Open
+                        </a>
+                      )}
+                      <button
+                        onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}
+                        aria-label="More"
+                        className="text-xs opacity-70"
                       >
                         •••
                       </button>
@@ -705,6 +866,57 @@ export default function ChatPage({ userId }: { userId: string }) {
           )
         })}
       </ul>
+
+      {/* Seen status under the last message */}
+      {(() => {
+        const last = messages[messages.length - 1]
+        if (!last || last.deleted_at || !info) return null
+        const lastTime = new Date(last.created_at).getTime()
+        const seenBy = info.members.filter(
+          (m) =>
+            m.user_id !== userId &&
+            m.user_id !== last.sender_id &&
+            new Date(m.last_read_at).getTime() >= lastTime,
+        )
+        if (!info.is_group) {
+          if (last.sender_id !== userId) return null
+          return (
+            <p className="-mt-2 self-end text-xs text-muted">{seenBy.length > 0 ? 'Seen' : 'Sent'}</p>
+          )
+        }
+        if (seenBy.length === 0) return null
+        return (
+          <div className="-mt-2 flex items-center gap-0.5 self-end" title={`Seen by ${seenBy.map((m) => personName(m.profile)).join(', ')}`}>
+            {seenBy.slice(0, 5).map((m) => (
+              <Avatar key={m.user_id} name={personName(m.profile)} url={m.profile.avatar_url} className="h-4 w-4 text-[8px]" />
+            ))}
+            {seenBy.length > 5 && <span className="ml-1 text-xs text-muted">+{seenBy.length - 5}</span>}
+          </div>
+        )
+      })()}
+
+      {/* Someone is typing */}
+      {typingIds.length > 0 && (
+        <div className="flex items-center gap-2 animate-fade-up">
+          {people[typingIds[0]] && (
+            <Avatar name={personName(people[typingIds[0]])} url={people[typingIds[0]].avatar_url} className="h-8 w-8 text-xs" />
+          )}
+          <span className="flex items-center gap-1 rounded-2xl border border-line bg-card px-3 py-3">
+            {[0, 1, 2].map((i) => (
+              <span
+                key={i}
+                className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted"
+                style={{ animationDelay: `${i * 150}ms` }}
+              />
+            ))}
+          </span>
+          {info?.is_group && (
+            <span className="text-xs text-muted">
+              {typingIds.map((id) => (people[id] ? personName(people[id]) : 'Someone')).join(', ')}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Composer: stays above the phone's bottom nav */}
       <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[5] flex flex-col gap-2 rounded-2xl border border-line bg-card p-2 shadow-sm md:bottom-4">
@@ -777,6 +989,44 @@ export default function ChatPage({ userId }: { userId: string }) {
           </div>
         )}
 
+        {panel === 'more' && (
+          <div className="flex gap-2 p-1">
+            <button
+              type="button"
+              onClick={() => setPanel('drawing')}
+              className="flex flex-1 flex-col items-center gap-1 rounded-xl bg-page py-3 text-sm text-ink"
+            >
+              <span className="text-2xl">✏️</span>Draw
+            </button>
+            <label className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded-xl bg-page py-3 text-sm text-ink">
+              <span className="text-2xl">📎</span>File
+              <input
+                type="file"
+                accept={FILE_ACCEPT}
+                onChange={(e) => {
+                  setPanel('none')
+                  sendFile(e)
+                }}
+                disabled={sending}
+                className="hidden"
+              />
+            </label>
+          </div>
+        )}
+
+        {panel === 'drawing' && (
+          <div className="flex flex-col gap-2 p-1">
+            <DrawingPad key={padKey} onChange={setDrawing} />
+            <button
+              onClick={sendDrawing}
+              disabled={!drawing || sending}
+              className="rounded-full bg-brand py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40 transition"
+            >
+              {sending ? 'Sending…' : 'Send drawing'}
+            </button>
+          </div>
+        )}
+
         {panel === 'voice' && (
           <div className="flex flex-col gap-2 p-2">
             <VoiceRecorder onChange={setRecording} />
@@ -811,9 +1061,30 @@ export default function ChatPage({ userId }: { userId: string }) {
           >
             😊
           </button>
+          {/* Phone: Draw and File live behind this button to save space */}
+          <button
+            type="button"
+            onClick={() => setPanel(panel === 'more' ? 'none' : 'more')}
+            aria-label="More"
+            className={`${iconBase} flex sm:hidden ${panel === 'more' ? 'bg-page' : ''}`}
+          >
+            ＋
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanel(panel === 'drawing' ? 'none' : 'drawing')}
+            aria-label="Draw"
+            className={`${iconBase} hidden sm:flex ${panel === 'drawing' ? 'bg-page' : ''}`}
+          >
+            ✏️
+          </button>
+          <label className={`${iconBase} hidden cursor-pointer sm:flex`} aria-label="Send a file">
+            📎
+            <input type="file" accept={FILE_ACCEPT} onChange={sendFile} disabled={sending} className="hidden" />
+          </label>
           <input
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => handleTyping(e.target.value)}
             maxLength={1000}
             placeholder="Message…"
             className="min-w-0 flex-1 rounded-full bg-page px-4 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
