@@ -8,6 +8,7 @@ import ThemeToggle from './components/ThemeToggle'
 import NavBar, { MessagesIcon } from './components/NavBar'
 import Logo from './components/Logo'
 import SuggestionsSidebar from './components/SuggestionsSidebar'
+import InstallPrompt from './components/InstallPrompt'
 import HomePage from './pages/HomePage'
 import SearchPage from './pages/SearchPage'
 import CreatePostPage from './pages/CreatePostPage'
@@ -28,7 +29,7 @@ function LoggedInApp({ userId }: { userId: string }) {
         <NavBar unread={unread} />
 
         {/* Phone: top bar with the logo and the light/dark switch */}
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-card px-4 py-1 md:hidden">
+        <header className="sticky top-0 z-10 flex pt-[env(safe-area-inset-top)] items-center justify-between border-b border-line bg-card px-4 py-1 md:hidden">
           <span className="flex items-center gap-2">
             <Logo className="h-8 w-8" />
             <span className="text-2xl font-bold text-brand">Tonal</span>
@@ -43,6 +44,11 @@ function LoggedInApp({ userId }: { userId: string }) {
 
         <div className="mx-auto flex w-full max-w-5xl justify-center gap-16 px-4 pt-6 pb-28 md:pt-10 md:pb-10">
           <main className="flex w-full max-w-[470px] flex-col items-center gap-4">
+            {/* "Install the app" banner, only on the home feed */}
+            <Routes>
+              <Route path="/" element={<InstallPrompt />} />
+              <Route path="*" element={null} />
+            </Routes>
             <Routes>
               <Route path="/" element={<HomePage userId={userId} />} />
               <Route path="/search" element={<SearchPage userId={userId} />} />
