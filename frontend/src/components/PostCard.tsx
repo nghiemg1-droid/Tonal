@@ -6,6 +6,8 @@ import VoicePlayer from './VoicePlayer'
 import LikeButton from './LikeButton'
 import ImageWithSound from './ImageWithSound'
 import CommentSection from './CommentSection'
+import { StoryRing } from './StoryBar'
+import type { StoryGroup } from './StoryViewer'
 
 export type Post = {
   id: string
@@ -53,9 +55,11 @@ type Props = {
   post: Post
   userId: string
   onDeleted: (id: string) => void
+  storyGroup?: StoryGroup
+  onOpenStory: (group: StoryGroup) => void
 }
 
-export default function PostCard({ post, userId, onDeleted }: Props) {
+export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenStory }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,11 +93,21 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
   return (
     <article className="w-full border-b border-line pb-5 animate-fade-up">
       <header className="mb-3 flex items-center gap-3">
-        <span className="rounded-full bg-brand p-0.5">
-          <span className="block rounded-full border-2 border-page">
+        {storyGroup ? (
+          <button
+            onClick={() => onOpenStory(storyGroup)}
+            aria-label={`View ${post.author.username}'s story`}
+            className="rounded-full"
+          >
+            <StoryRing active>
+              <Avatar name={name} url={post.author.avatar_url} className="h-8 w-8 text-sm" />
+            </StoryRing>
+          </button>
+        ) : (
+          <StoryRing active={false}>
             <Avatar name={name} url={post.author.avatar_url} className="h-8 w-8 text-sm" />
-          </span>
-        </span>
+          </StoryRing>
+        )}
 
         <p className="min-w-0 flex-1 truncate text-sm">
           <span className="font-semibold text-ink">{post.author.username}</span>

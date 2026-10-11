@@ -1,0 +1,885 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
+import { Link, useParams } from 'react-router'
+import { supabase } from '../lib/supabase'
+import { makePostImage } from '../lib/image'
+import { timeAgo } from '../lib/time'
+import { PERSON_FIELDS, personName } from '../lib/chat'
+import type { Person } from '../lib/chat'
+import Avatar from '../components/Avatar'
+import GroupAvatar from '../components/GroupAvatar'
+import GroupInfo from '../components/GroupInfo'
+import type { Member } from '../components/GroupInfo'
+import VoicePlayer from '../components/VoicePlayer'
+import VoiceRecorder from '../components/VoiceRecorder'
+import type { Recording } from '../components/VoiceRecorder'
+
+type Message = {
+  id: string
+  conversation_id: string
+  sender_id: string
+  kind: 'text' | 'voice' | 'image' | 'sticker'
+  body: string | null
+  media_path: string | null
+  duration_ms: number | null
+  reply_to_id: string | null
+  deleted_at: string | null
+  view_once: boolean
+  created_at: string
+}
+
+type View = {
+  message_id: string
+  user_id: string
+}
+
+type Reaction = {
+  message_id: string
+  user_id: string
+  emoji: string | null
+}
+
+type Info = {
+  id: string
+  is_group: boolean
+  name: string | null
+  members: Member[]
+}
+
+// message id -> (user id -> emoji)
+type ReactionMap = Record<string, Record<string, string>>
+
+const MESSAGE_FIELDS =
+  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, reply_to_id, deleted_at, view_once, created_at'
+const PAGE = 40
+const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
+const STICKERS = ['🎉', '🔥', '🥳', '😍', '🤣', '😭', '🙏', '👏', '💯', '✨', '🎶', '🌹', '🐶', '🐱', '🍕', '☕']
+
+function audioExtension(mime: string) {
+  if (mime.includes('mp4')) return 'm4a'
+  if (mime.includes('ogg')) return 'ogg'
+  return 'webm'
+}
+
+function preview(m: Message) {
+  if (m.deleted_at) return 'Message unsent'
+  if (m.kind === 'text' || m.kind === 'sticker') return m.body ?? ''
+  if (m.kind === 'voice') return '🎙️ Voice message'
+  return m.view_once ? '📸 View-once photo' : '📷 Photo'
+}
+
+// Files we can show right away (view-once photos are only fetched when opened)
+function normalPaths(list: Message[]) {
+  return list.flatMap((m) => (m.media_path && !m.view_once ? [m.media_path] : []))
+}
+
+function addView(map: Record<string, string[]>, v: View) {
+  const list = map[v.message_id] ?? []
+  return list.includes(v.user_id) ? map : { ...map, [v.message_id]: [...list, v.user_id] }
+}
+
+function applyReaction(map: ReactionMap, r: Reaction): ReactionMap {
+  const forMessage = { ...(map[r.message_id] ?? {}) }
+  if (r.emoji) forMessage[r.user_id] = r.emoji
+  else delete forMessage[r.user_id]
+  return { ...map, [r.message_id]: forMessage }
+}
+
+export default function ChatPage({ userId }: { userId: string }) {
+  const { conversationId = '' } = useParams()
+
+  const [info, setInfo] = useState<Info | null>(null)
+  const [notFound, setNotFound] = useState(false)
+  const [people, setPeople] = useState<Record<string, Person>>({})
+  const [messages, setMessages] = useState<Message[]>([])
+  const [reactions, setReactions] = useState<ReactionMap>({})
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  const [hasMore, setHasMore] = useState(false)
+  // view-once message id -> ids of people who opened it
+  const [views, setViews] = useState<Record<string, string[]>>({})
+  const [viewing, setViewing] = useState<{ url: string; path: string } | null>(null)
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null)
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null)
+  const [photoMode, setPhotoMode] = useState<'keep' | 'once'>('keep')
+
+  const [text, setText] = useState('')
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [panel, setPanel] = useState<'none' | 'stickers' | 'voice'>('none')
+  const [recording, setRecording] = useState<Recording | null>(null)
+  const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [showInfo, setShowInfo] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const urlsRef = useRef(urls)
+  urlsRef.current = urls
+  const peopleRef = useRef(people)
+  peopleRef.current = people
+  const lastIdRef = useRef<string | null>(null)
+
+  // ---------- helpers ----------
+  const signUrls = useCallback(async (paths: string[]) => {
+    const missing = paths.filter((p) => !urlsRef.current[p])
+    if (missing.length === 0) return
+    const { data } = await supabase.storage.from('messages').createSignedUrls(missing, 3600)
+    const next: Record<string, string> = {}
+    for (const item of data ?? []) {
+      if (item.path && item.signedUrl) next[item.path] = item.signedUrl
+    }
+    setUrls((prev) => ({ ...prev, ...next }))
+  }, [])
+
+  // Senders who already left a group are not in the member list: fetch them
+  const ensurePeople = useCallback(async (ids: string[]) => {
+    const missing = [...new Set(ids)].filter((id) => !peopleRef.current[id])
+    if (missing.length === 0) return
+    const { data } = await supabase.from('profiles').select(PERSON_FIELDS).in('id', missing)
+    const next: Record<string, Person> = {}
+    for (const p of (data ?? []) as Person[]) next[p.id] = p
+    setPeople((prev) => ({ ...prev, ...next }))
+  }, [])
+
+  const markRead = useCallback(async () => {
+    await supabase
+      .from('conversation_members')
+      .update({ last_read_at: new Date().toISOString() })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+  }, [conversationId, userId])
+
+  const addMessage = useCallback(
+    (m: Message) => {
+      setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
+      signUrls(normalPaths([m]))
+      ensurePeople([m.sender_id])
+    },
+    [signUrls, ensurePeople],
+  )
+
+  // Load a page of messages older than `before` (or the newest page)
+  const loadMessages = useCallback(
+    async (before?: string) => {
+      let query = supabase
+        .from('messages')
+        .select(MESSAGE_FIELDS)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(PAGE)
+      if (before) query = query.lt('created_at', before)
+
+      const { data, error } = await query
+      if (error) throw error
+      const page = ((data ?? []) as Message[]).reverse()
+
+      const ids = page.map((m) => m.id)
+      const { data: reactionRows } = ids.length
+        ? await supabase
+            .from('message_reactions')
+            .select('message_id, user_id, emoji')
+            .in('message_id', ids)
+        : { data: [] }
+
+      const onceIds = page.filter((m) => m.view_once).map((m) => m.id)
+      const { data: viewRows } = onceIds.length
+        ? await supabase.from('message_views').select('message_id, user_id').in('message_id', onceIds)
+        : { data: [] }
+
+      return {
+        page,
+        reactionRows: (reactionRows ?? []) as Reaction[],
+        viewRows: (viewRows ?? []) as View[],
+      }
+    },
+    [conversationId],
+  )
+
+  // ---------- conversation info (name, members) ----------
+  const loadInfo = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select(
+        `id, is_group, name, members:conversation_members(user_id, role, profile:profiles(${PERSON_FIELDS}))`,
+      )
+      .eq('id', conversationId)
+      .maybeSingle()
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+    if (!data) {
+      setNotFound(true)
+      return
+    }
+    const loaded = data as unknown as Info
+    setInfo(loaded)
+    const map: Record<string, Person> = {}
+    for (const m of loaded.members) if (m.profile) map[m.user_id] = m.profile
+    setPeople((prev) => ({ ...prev, ...map }))
+  }, [conversationId])
+
+  // ---------- first load ----------
+  useEffect(() => {
+    let cancelled = false
+    lastIdRef.current = null
+    setMessages([])
+    setReactions({})
+    setViews({})
+    setNotFound(false)
+    setShowInfo(false)
+
+    async function load() {
+      await loadInfo()
+      try {
+        const { page, reactionRows, viewRows } = await loadMessages()
+        if (cancelled) return
+        setMessages(page)
+        setHasMore(page.length === PAGE)
+        setReactions(reactionRows.reduce(applyReaction, {}))
+        setViews(viewRows.reduce(addView, {}))
+        signUrls(normalPaths(page))
+        ensurePeople(page.map((m) => m.sender_id))
+        markRead()
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message)
+      }
+    }
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [loadInfo, loadMessages, signUrls, ensurePeople, markRead])
+
+  // ---------- realtime ----------
+  useEffect(() => {
+    const filter = `conversation_id=eq.${conversationId}`
+    const channel = supabase
+      .channel(`chat:${conversationId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter }, (payload) => {
+        const m = payload.new as Message
+        addMessage(m)
+        if (m.sender_id !== userId) markRead()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter }, (payload) => {
+        const m = payload.new as Message
+        setMessages((prev) => prev.map((x) => (x.id === m.id ? m : x)))
+        if (m.deleted_at) setReactions((prev) => ({ ...prev, [m.id]: {} }))
+      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions', filter },
+        (payload) => {
+          const r = payload.new as Reaction
+          if (r?.message_id) setReactions((prev) => applyReaction(prev, r))
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'message_views', filter },
+        (payload) => setViews((prev) => addView(prev, payload.new as View)),
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [conversationId, userId, addMessage, markRead])
+
+  // Scroll to the bottom when a new message arrives (not when loading older ones)
+  useLayoutEffect(() => {
+    const last = messages[messages.length - 1]
+    if (!last || last.id === lastIdRef.current) return
+    const first = lastIdRef.current === null
+    lastIdRef.current = last.id
+    window.scrollTo({ top: document.body.scrollHeight, behavior: first ? 'auto' : 'smooth' })
+  }, [messages])
+
+  // Preview of the photo you're about to send
+  useEffect(() => {
+    if (!pendingPhoto) {
+      setPendingUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(pendingPhoto)
+    setPendingUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [pendingPhoto])
+
+  async function loadOlder() {
+    const oldest = messages[0]
+    if (!oldest) return
+    try {
+      const { page, reactionRows, viewRows } = await loadMessages(oldest.created_at)
+      setMessages((prev) => [...page, ...prev])
+      setHasMore(page.length === PAGE)
+      setReactions((prev) => reactionRows.reduce(applyReaction, prev))
+      setViews((prev) => viewRows.reduce(addView, prev))
+      signUrls(normalPaths(page))
+      ensurePeople(page.map((m) => m.sender_id))
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  // ---------- sending ----------
+  async function insertMessage(fields: Partial<Message>) {
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        reply_to_id: replyTo?.id ?? null,
+        ...fields,
+      })
+      .select(MESSAGE_FIELDS)
+      .single()
+    if (error) throw error
+    addMessage(data as Message)
+    setReplyTo(null)
+  }
+
+  async function uploadFile(blob: Blob, contentType: string, ext: string) {
+    const path = `${conversationId}/${userId}/${crypto.randomUUID()}.${ext}`
+    const { error } = await supabase.storage.from('messages').upload(path, blob, { contentType })
+    if (error) throw error
+    return path
+  }
+
+  async function send(task: () => Promise<void>) {
+    setSending(true)
+    setError(null)
+    try {
+      await task()
+    } catch (err) {
+      setError((err as Error).message)
+    }
+    setSending(false)
+  }
+
+  function sendText(e: FormEvent) {
+    e.preventDefault()
+    const body = text.trim()
+    if (!body || sending) return
+    send(async () => {
+      await insertMessage({ kind: 'text', body })
+      setText('')
+    })
+  }
+
+  function sendSticker(sticker: string) {
+    setPanel('none')
+    send(() => insertMessage({ kind: 'sticker', body: sticker }))
+  }
+
+  // Step 1: pick a photo -> show a preview where you choose "Keep in chat" or "View once"
+  function pickPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so picking the same photo again still works
+    if (!file) return
+    setPanel('none')
+    setPhotoMode('keep')
+    setPendingPhoto(file)
+  }
+
+  // Step 2: send it
+  function sendPhoto() {
+    const file = pendingPhoto
+    if (!file) return
+    const viewOnce = photoMode === 'once'
+    send(async () => {
+      const blob = await makePostImage(file, 1280) // also strips GPS location
+      const path = await uploadFile(blob, blob.type, blob.type === 'image/webp' ? 'webp' : 'jpg')
+      try {
+        await insertMessage({ kind: 'image', media_path: path, view_once: viewOnce })
+      } catch (err) {
+        await supabase.storage.from('messages').remove([path])
+        throw err
+      }
+      setPendingPhoto(null)
+    })
+  }
+
+  // ---------- view-once ----------
+  async function openViewOnce(m: Message) {
+    setError(null)
+    const { data, error } = await supabase.rpc('open_view_once', { msg_id: m.id })
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setViews((prev) => addView(prev, { message_id: m.id, user_id: userId }))
+    const path = data as string
+    // The link only works for 60 seconds, and the database only allows it for 1 minute
+    const { data: signed, error: signError } = await supabase.storage
+      .from('messages')
+      .createSignedUrl(path, 60)
+    if (signError || !signed) {
+      setError(signError?.message ?? 'Could not open the photo')
+      return
+    }
+    setViewing({ url: signed.signedUrl, path })
+  }
+
+  function closeViewer() {
+    const path = viewing?.path
+    setViewing(null)
+    // If everyone has now seen it, delete the file for good (fails quietly otherwise)
+    if (path) supabase.storage.from('messages').remove([path])
+  }
+
+  function handleBubbleClick(m: Message) {
+    const canOpen =
+      m.view_once && !m.deleted_at && m.sender_id !== userId && !(views[m.id] ?? []).includes(userId)
+    if (canOpen) openViewOnce(m)
+    else setMenuFor(menuFor === m.id ? null : m.id)
+  }
+
+  function sendVoice() {
+    if (!recording) return
+    const rec = recording
+    send(async () => {
+      const type = rec.blob.type.split(';')[0] || 'audio/webm'
+      const path = await uploadFile(rec.blob, type, audioExtension(type))
+      try {
+        await insertMessage({ kind: 'voice', media_path: path, duration_ms: rec.durationMs })
+      } catch (err) {
+        await supabase.storage.from('messages').remove([path])
+        throw err
+      }
+      setRecording(null)
+      setPanel('none')
+    })
+  }
+
+  // ---------- reactions, reply, unsend ----------
+  async function react(message: Message, emoji: string) {
+    setMenuFor(null)
+    const current = reactions[message.id]?.[userId]
+    const next = current === emoji ? null : emoji
+    setReactions((prev) => applyReaction(prev, { message_id: message.id, user_id: userId, emoji: next }))
+
+    const { error } = await supabase.from('message_reactions').upsert(
+      {
+        message_id: message.id,
+        user_id: userId,
+        conversation_id: conversationId,
+        emoji: next,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'message_id,user_id' },
+    )
+    if (error) {
+      setError(error.message)
+      setReactions((prev) =>
+        applyReaction(prev, { message_id: message.id, user_id: userId, emoji: current ?? null }),
+      )
+    }
+  }
+
+  async function unsend(message: Message) {
+    setMenuFor(null)
+    if (!window.confirm('Unsend this message for everyone?')) return
+    const { data, error } = await supabase.rpc('unsend_message', { msg_id: message.id })
+    if (error) {
+      setError(error.message)
+      return
+    }
+    const oldPath = data as string | null
+    if (oldPath) await supabase.storage.from('messages').remove([oldPath])
+    setMessages((prev) =>
+      prev.map((x) =>
+        x.id === message.id
+          ? { ...x, deleted_at: new Date().toISOString(), body: null, media_path: null, duration_ms: null }
+          : x,
+      ),
+    )
+    setReactions((prev) => ({ ...prev, [message.id]: {} }))
+  }
+
+  // ---------- render ----------
+  if (notFound) {
+    return (
+      <div className="w-full rounded-2xl border border-line bg-card p-6 text-center">
+        <p className="text-ink">This chat doesn't exist or you're no longer in it.</p>
+        <Link to="/messages" className="mt-3 inline-block text-sm text-brand">
+          Back to messages
+        </Link>
+      </div>
+    )
+  }
+
+  const others = (info?.members ?? []).filter((m) => m.user_id !== userId).map((m) => m.profile)
+  const title = info
+    ? info.is_group
+      ? info.name || others.map(personName).join(', ')
+      : others[0]
+        ? personName(others[0])
+        : 'Tonal user'
+    : ''
+  const byId = new Map(messages.map((m) => [m.id, m]))
+  const iconButton =
+    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl hover:bg-page active:scale-90 disabled:opacity-40 transition'
+
+  return (
+    <div className="flex w-full flex-col gap-3">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-line pb-3">
+        <Link to="/messages" aria-label="Back" className="text-3xl leading-none text-muted hover:text-ink">
+          ‹
+        </Link>
+        <GroupAvatar people={others} small />
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-bold text-ink">{title}</p>
+          {info?.is_group && <p className="text-xs text-muted">{info.members.length} members</p>}
+          {info && !info.is_group && others[0] && (
+            <p className="truncate text-xs text-muted">@{others[0].username}</p>
+          )}
+        </div>
+        {info?.is_group && (
+          <button
+            onClick={() => setShowInfo((v) => !v)}
+            aria-label="Group info"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-line text-sm text-ink hover:bg-card"
+          >
+            i
+          </button>
+        )}
+      </div>
+
+      {showInfo && info?.is_group && (
+        <GroupInfo
+          conversationId={conversationId}
+          userId={userId}
+          name={info.name ?? ''}
+          members={info.members}
+          onChanged={loadInfo}
+          onClose={() => setShowInfo(false)}
+        />
+      )}
+
+      {hasMore && (
+        <button onClick={loadOlder} className="self-center text-sm text-brand hover:underline">
+          Load older messages
+        </button>
+      )}
+
+      {/* Messages */}
+      <ul className="flex flex-col gap-1">
+        {messages.map((m, i) => {
+          const mine = m.sender_id === userId
+          const prev = messages[i - 1]
+          const firstOfRun = !prev || prev.sender_id !== m.sender_id
+          const sender = people[m.sender_id]
+          const replied = m.reply_to_id ? byId.get(m.reply_to_id) : undefined
+          const myReaction = reactions[m.id]?.[userId]
+          const counts = Object.values(reactions[m.id] ?? {}).reduce<Record<string, number>>(
+            (acc, e) => ({ ...acc, [e]: (acc[e] ?? 0) + 1 }),
+            {},
+          )
+          const url = m.media_path ? urls[m.media_path] : undefined
+          const bubbleBase = mine
+            ? 'bg-brand text-white rounded-br-md'
+            : 'bg-card text-ink border border-line rounded-bl-md'
+
+          return (
+            <li key={m.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'} ${firstOfRun ? 'mt-2' : ''}`}>
+              {!mine && info?.is_group && firstOfRun && sender && (
+                <span className="mb-0.5 ml-10 text-xs text-muted">{personName(sender)}</span>
+              )}
+
+              <div className={`flex max-w-[80%] items-end gap-2 ${mine ? 'flex-row-reverse' : ''}`}>
+                {!mine && (
+                  <span className="w-8 shrink-0">
+                    {firstOfRun && sender && (
+                      <Avatar name={personName(sender)} url={sender.avatar_url} className="h-8 w-8 text-xs" />
+                    )}
+                  </span>
+                )}
+
+                <div className={`flex min-w-0 flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                  {m.reply_to_id && !m.deleted_at && (
+                    <span className="mb-0.5 max-w-full truncate rounded-xl bg-page px-3 py-1 text-xs text-muted">
+                      ↩ {replied ? `${personName(people[replied.sender_id] ?? { id: '', username: 'someone', display_name: null, avatar_url: null })}: ${preview(replied)}` : 'Original message'}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => handleBubbleClick(m)}
+                    title={new Date(m.created_at).toLocaleString()}
+                    className="max-w-full text-left"
+                  >
+                    {m.deleted_at ? (
+                      <span className="block rounded-2xl border border-line px-3 py-2 text-sm italic text-muted">
+                        Message unsent
+                      </span>
+                    ) : m.kind === 'text' ? (
+                      <span className={`block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 ${bubbleBase}`}>
+                        {m.body}
+                      </span>
+                    ) : m.kind === 'sticker' ? (
+                      <span className="block text-6xl leading-none transition hover:scale-110">{m.body}</span>
+                    ) : m.view_once ? (
+                      <ViewOnceBubble
+                        mine={mine}
+                        openedBy={(views[m.id] ?? []).length}
+                        openedByMe={(views[m.id] ?? []).includes(userId)}
+                        isGroup={!!info?.is_group}
+                      />
+                    ) : m.kind === 'image' ? (
+                      url ? (
+                        <img src={url} alt="Photo" loading="lazy" className="max-h-80 rounded-2xl object-cover" />
+                      ) : (
+                        <span className="block h-48 w-48 animate-pulse rounded-2xl bg-line" />
+                      )
+                    ) : null}
+                  </button>
+
+                  {/* VoicePlayer is its own button, so keep it outside the bubble button */}
+                  {!m.deleted_at && m.kind === 'voice' && (
+                    <div className="w-60" onDoubleClick={() => setMenuFor(m.id)}>
+                      {url ? (
+                        <VoicePlayer src={url} durationMs={m.duration_ms ?? 1} />
+                      ) : (
+                        <span className="block h-16 animate-pulse rounded-2xl bg-line" />
+                      )}
+                      <button
+                        onClick={() => setMenuFor(menuFor === m.id ? null : m.id)}
+                        className="mt-0.5 text-xs text-muted hover:text-ink"
+                      >
+                        •••
+                      </button>
+                    </div>
+                  )}
+
+                  {Object.keys(counts).length > 0 && (
+                    <div className="-mt-1 flex gap-1">
+                      {Object.entries(counts).map(([emoji, count]) => (
+                        <button
+                          key={emoji}
+                          onClick={() => react(m, emoji)}
+                          className={`rounded-full border px-1.5 text-xs shadow-sm ${
+                            myReaction === emoji ? 'border-brand bg-brand/10' : 'border-line bg-card'
+                          }`}
+                        >
+                          {emoji}
+                          {count > 1 && <span className="ml-0.5 text-muted">{count}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {menuFor === m.id && !m.deleted_at && (
+                <div className={`mt-1 flex flex-wrap items-center gap-1 rounded-full border border-line bg-card px-2 py-1 shadow-sm animate-fade-up ${mine ? '' : 'ml-10'}`}>
+                  {REACTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => react(m, emoji)}
+                      className={`rounded-full p-1 text-lg transition hover:scale-125 ${myReaction === emoji ? 'bg-brand/15' : ''}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                  <span className="mx-1 h-5 w-px bg-line" />
+                  <button
+                    onClick={() => {
+                      setReplyTo(m)
+                      setMenuFor(null)
+                    }}
+                    className="px-2 text-xs font-medium text-ink hover:text-brand"
+                  >
+                    Reply
+                  </button>
+                  {mine && (
+                    <button onClick={() => unsend(m)} className="px-2 text-xs font-medium text-red-500">
+                      Unsend
+                    </button>
+                  )}
+                  <span className="px-1 text-[10px] text-muted">{timeAgo(m.created_at)}</span>
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+
+      {/* Composer: stays above the phone's bottom nav */}
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-[5] flex flex-col gap-2 rounded-2xl border border-line bg-card p-2 shadow-sm md:bottom-4">
+        {replyTo && (
+          <div className="flex items-center gap-2 rounded-xl bg-page px-3 py-1.5 text-xs text-muted">
+            <span className="min-w-0 flex-1 truncate">
+              Replying to{' '}
+              <b className="text-ink">
+                {replyTo.sender_id === userId ? 'yourself' : personName(people[replyTo.sender_id] ?? { id: '', username: 'someone', display_name: null, avatar_url: null })}
+              </b>
+              : {preview(replyTo)}
+            </span>
+            <button onClick={() => setReplyTo(null)} aria-label="Cancel reply" className="text-base">
+              ×
+            </button>
+          </div>
+        )}
+
+        {pendingPhoto && (
+          <div className="flex flex-col gap-2 p-1">
+            {pendingUrl && (
+              <img src={pendingUrl} alt="Photo to send" className="max-h-56 self-center rounded-xl object-contain" />
+            )}
+            <div className="flex gap-1 rounded-full bg-page p-1 text-sm">
+              {(['keep', 'once'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPhotoMode(mode)}
+                  className={`flex-1 rounded-full py-1.5 transition ${
+                    photoMode === mode ? 'bg-brand font-medium text-white' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {mode === 'keep' ? '📷 Keep in chat' : '📸 View once'}
+                </button>
+              ))}
+            </div>
+            <p className="text-center text-xs text-muted">
+              {photoMode === 'keep'
+                ? 'Everyone in the chat can see it any time.'
+                : 'Each person can open it one time. Then it disappears.'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingPhoto(null)}
+                className="flex-1 rounded-full border border-line py-2 text-sm text-ink hover:bg-page transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={sendPhoto}
+                disabled={sending}
+                className="flex-1 rounded-full bg-brand py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40 transition"
+              >
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {panel === 'stickers' && (
+          <div className="grid grid-cols-8 gap-1">
+            {STICKERS.map((s) => (
+              <button key={s} onClick={() => sendSticker(s)} className="rounded-lg p-1 text-3xl transition hover:scale-110 hover:bg-page">
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {panel === 'voice' && (
+          <div className="flex flex-col gap-2 p-2">
+            <VoiceRecorder onChange={setRecording} />
+            <button
+              onClick={sendVoice}
+              disabled={!recording || sending}
+              className="rounded-full bg-brand py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-40 transition"
+            >
+              {sending ? 'Sending…' : 'Send voice message'}
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={sendText} className="flex items-center gap-1">
+          <label className={`${iconButton} cursor-pointer`} aria-label="Send a photo">
+            📷
+            <input type="file" accept="image/*" onChange={pickPhoto} disabled={sending} className="hidden" />
+          </label>
+          <button
+            type="button"
+            onClick={() => setPanel(panel === 'voice' ? 'none' : 'voice')}
+            aria-label="Voice message"
+            className={`${iconButton} ${panel === 'voice' ? 'bg-page' : ''}`}
+          >
+            🎙️
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanel(panel === 'stickers' ? 'none' : 'stickers')}
+            aria-label="Stickers"
+            className={`${iconButton} ${panel === 'stickers' ? 'bg-page' : ''}`}
+          >
+            😊
+          </button>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={1000}
+            placeholder="Message…"
+            className="min-w-0 flex-1 rounded-full bg-page px-4 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+          />
+          <button
+            type="submit"
+            disabled={!text.trim() || sending}
+            className="px-3 font-semibold text-brand disabled:opacity-40"
+          >
+            Send
+          </button>
+        </form>
+
+        {error && <p className="px-2 text-xs text-red-500">{error}</p>}
+      </div>
+
+      {/* Full-screen viewer for a view-once photo */}
+      {viewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black select-none"
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <img
+            src={viewing.url}
+            alt="View-once photo"
+            draggable={false}
+            className="max-h-full max-w-full object-contain [-webkit-touch-callout:none]"
+          />
+          <button
+            onClick={closeViewer}
+            aria-label="Close"
+            className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-2xl text-white hover:bg-white/30"
+          >
+            ×
+          </button>
+          <p className="absolute bottom-[max(1.5rem,env(safe-area-inset-bottom))] text-sm text-white/70">
+            View once · closes for good
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+type ViewOnceProps = {
+  mine: boolean
+  openedBy: number
+  openedByMe: boolean
+  isGroup: boolean
+}
+
+function ViewOnceBubble({ mine, openedBy, openedByMe, isGroup }: ViewOnceProps) {
+  const base = 'flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-medium'
+
+  if (mine) {
+    const status = openedBy === 0 ? 'Delivered' : isGroup ? `Opened by ${openedBy}` : 'Opened'
+    return (
+      <span className={`${base} border border-line bg-card text-ink`}>
+        📸 Photo <span className="font-normal text-muted">· {status}</span>
+      </span>
+    )
+  }
+
+  if (openedByMe) {
+    return <span className={`${base} border border-line text-muted`}>📸 Opened</span>
+  }
+
+  return <span className={`${base} bg-brand text-white`}>📸 Tap to view</span>
+}

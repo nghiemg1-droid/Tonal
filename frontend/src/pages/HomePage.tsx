@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
+import { useStories } from '../hooks/useStories'
 import PostCard from '../components/PostCard'
 import type { Post } from '../components/PostCard'
 import StoryBar from '../components/StoryBar'
+import StoryViewer from '../components/StoryViewer'
+import type { StoryGroup } from '../components/StoryViewer'
 
 const PAGE_SIZE = 10
 const POST_FIELDS =
   'id, kind, media_path, audio_path, duration_ms, caption_kind, caption_text, caption_path, caption_duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count), comments(count)'
+
 // What the database sends back, before we add "did I like it?"
 type PostRow = Omit<Post, 'like_count' | 'liked_by_me' | 'comment_count'> & {
   likes: { count: number }[]
@@ -52,6 +56,10 @@ export default function HomePage({ userId }: { userId: string }) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Stories: one source for both the story bar and the rings on posts
+  const { me, groups, reload: reloadStories } = useStories(userId)
+  const [viewingStory, setViewingStory] = useState<StoryGroup | null>(null)
 
   // First page: me + everyone I follow
   useEffect(() => {
@@ -118,7 +126,14 @@ export default function HomePage({ userId }: { userId: string }) {
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <StoryBar userId={userId} />
+      <StoryBar
+        userId={userId}
+        me={me}
+        groups={groups}
+        onChanged={reloadStories}
+        onOpen={setViewingStory}
+      />
+
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {posts.length === 0 ? (
@@ -142,7 +157,14 @@ export default function HomePage({ userId }: { userId: string }) {
         </div>
       ) : (
         posts.map((post) => (
-          <PostCard key={post.id} post={post} userId={userId} onDeleted={removePost} />
+          <PostCard
+            key={post.id}
+            post={post}
+            userId={userId}
+            onDeleted={removePost}
+            storyGroup={groups.get(post.author.id)}
+            onOpenStory={setViewingStory}
+          />
         ))
       )}
 
@@ -154,6 +176,20 @@ export default function HomePage({ userId }: { userId: string }) {
         >
           {loadingMore ? 'Loading...' : 'Load more'}
         </button>
+      )}
+
+      {/* One story viewer for the whole page */}
+      {viewingStory && (
+        <StoryViewer
+          key={viewingStory.person.id}
+          group={viewingStory}
+          isMine={viewingStory.person.id === userId}
+          onClose={() => setViewingStory(null)}
+          onDeleted={() => {
+            setViewingStory(null)
+            reloadStories()
+          }}
+        />
       )}
     </div>
   )

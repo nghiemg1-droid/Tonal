@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
+import { startChat } from '../lib/chat'
 import Avatar from './Avatar'
 
 type Result = {
@@ -22,6 +24,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
   const [following, setFollowing] = useState<Set<string>>(new Set())
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   // Load the list of people I already follow
   useEffect(() => {
@@ -90,6 +93,15 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
     onFollowChange?.()
   }
 
+  async function openChat(targetId: string) {
+    setError(null)
+    try {
+      navigate(`/messages/${await startChat(targetId)}`)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   return (
     <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up">
       <h2 className="mb-3 text-xl font-bold text-ink">Find people</h2>
@@ -126,6 +138,14 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
                 <p className="truncate font-medium text-ink">{name}</p>
                 <p className="truncate text-sm text-muted">@{person.username}</p>
               </div>
+              <button
+                onClick={() => openChat(person.id)}
+                aria-label={`Message ${name}`}
+                title="Message"
+                className="rounded-full border border-line px-2.5 py-1.5 text-sm hover:bg-page active:scale-95 transition"
+              >
+                💬
+              </button>
               <button
                 onClick={() => toggleFollow(person.id)}
                 disabled={busyId === person.id}
