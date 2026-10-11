@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
 import VoicePlayer from './VoicePlayer'
 import LikeButton from './LikeButton'
 import ImageWithSound from './ImageWithSound'
+import CommentSection from './CommentSection'
 
 export type Post = {
   id: string
@@ -18,24 +20,13 @@ export type Post = {
   created_at: string
   like_count: number
   liked_by_me: boolean
+  comment_count: number
   author: {
     id: string
     username: string
     display_name: string | null
     avatar_url: string | null
   }
-}
-
-function timeAgo(iso: string) {
-  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (seconds < 60) return 'now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}d`
-  return new Date(iso).toLocaleDateString()
 }
 
 function fileUrl(path: string) {
@@ -68,6 +59,8 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showComments, setShowComments] = useState(false)
+  const [commentCount, setCommentCount] = useState(post.comment_count)
 
   const isMine = post.author.id === userId
   const mediaUrl = fileUrl(post.media_path)
@@ -158,12 +151,15 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
           initialCount={post.like_count}
         />
         <button
-          disabled
-          aria-label="Comments (coming soon)"
-          title="Comments are coming soon"
-          className="rounded-full px-3 py-1.5 text-muted opacity-60"
+          onClick={() => setShowComments((open) => !open)}
+          aria-label="Comments"
+          aria-expanded={showComments}
+          className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 hover:bg-page active:scale-90 transition ${
+            showComments ? 'text-brand' : 'text-muted'
+          }`}
         >
           <CommentIcon />
+          <span className="text-sm tabular-nums">{commentCount}</span>
         </button>
       </footer>
 
@@ -185,6 +181,15 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
         <div className="mt-2">
           <VoicePlayer src={fileUrl(post.caption_path)} durationMs={post.caption_duration_ms ?? 0} />
         </div>
+      )}
+
+      {showComments && (
+        <CommentSection
+          postId={post.id}
+          postAuthorId={post.author.id}
+          userId={userId}
+          onCountChange={(delta) => setCommentCount((count) => count + delta)}
+        />
       )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}

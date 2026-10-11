@@ -7,9 +7,12 @@ import StoryBar from '../components/StoryBar'
 
 const PAGE_SIZE = 10
 const POST_FIELDS =
-  'id, kind, media_path, audio_path, duration_ms, caption_kind, caption_text, caption_path, caption_duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count)'
+  'id, kind, media_path, audio_path, duration_ms, caption_kind, caption_text, caption_path, caption_duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count), comments(count)'
 // What the database sends back, before we add "did I like it?"
-type PostRow = Omit<Post, 'like_count' | 'liked_by_me'> & { likes: { count: number }[] }
+type PostRow = Omit<Post, 'like_count' | 'liked_by_me' | 'comment_count'> & {
+  likes: { count: number }[]
+  comments: { count: number }[]
+}
 
 // Newest posts from these authors; "before" loads the next (older) page
 function fetchPosts(authorIds: string[], before?: string) {
@@ -23,7 +26,7 @@ function fetchPosts(authorIds: string[], before?: string) {
   return query
 }
 
-// Add the like count and whether I liked each post
+// Add the like count, comment count, and whether I liked each post
 async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post[]> {
   if (rows.length === 0) return []
 
@@ -34,9 +37,10 @@ async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post[]> {
     .in('post_id', rows.map((row) => row.id))
   const likedByMe = new Set((data ?? []).map((row) => row.post_id))
 
-  return rows.map(({ likes, ...post }) => ({
+  return rows.map(({ likes, comments, ...post }) => ({
     ...post,
     like_count: likes[0]?.count ?? 0,
+    comment_count: comments[0]?.count ?? 0,
     liked_by_me: likedByMe.has(post.id),
   }))
 }
