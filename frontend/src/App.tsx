@@ -56,7 +56,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-page md:pl-60">
+      <div className="min-h-screen bg-page md:pl-20">
         <NavBar />
         <ThemeToggle />
         <main className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 px-4 pt-20 pb-28 md:pb-10">

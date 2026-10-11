@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router'
 
 const iconProps = {
-  className: 'h-6 w-6',
+  className: 'h-7 w-7',
   viewBox: '0 0 24 24',
   fill: 'none',
   stroke: 'currentColor',
@@ -48,28 +48,31 @@ function ProfileIcon() {
 const links = [
   { to: '/', label: 'Home', icon: <HomeIcon /> },
   { to: '/search', label: 'Search', icon: <SearchIcon /> },
-  { to: '/new', label: 'New', icon: <NewIcon /> },
+  { to: '/new', label: 'New post', icon: <NewIcon /> },
   { to: '/profile', label: 'Profile', icon: <ProfileIcon /> },
 ]
 
 export default function NavBar() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:left-0 md:right-auto md:w-60 md:flex-col md:gap-1 md:border-t-0 md:border-r md:px-3 md:py-6">
-      <span className="hidden px-3 pb-6 text-3xl font-bold text-brand md:block">Tonal</span>
+    <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:left-0 md:right-auto md:w-20 md:flex-col md:items-center md:gap-2 md:border-t-0 md:border-r md:py-6">
+      <span className="hidden pb-6 text-3xl font-bold text-brand md:block" aria-label="Tonal">
+        T
+      </span>
 
       {links.map((link) => (
         <NavLink
           key={link.to}
           to={link.to}
           end={link.to === '/'}
+          aria-label={link.label}
+          title={link.label}
           className={({ isActive }) =>
-            `group flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs transition md:flex-none md:flex-row md:justify-start md:gap-4 md:rounded-xl md:px-3 md:py-3 md:text-base md:hover:bg-page ${
-              isActive ? 'font-semibold text-brand' : 'text-muted hover:text-ink'
+            `group flex flex-1 items-center justify-center py-3 transition md:h-12 md:w-12 md:flex-none md:rounded-xl md:py-0 md:hover:bg-page ${
+              isActive ? 'text-brand' : 'text-muted hover:text-ink'
             }`
           }
         >
           <span className="transition group-active:scale-90">{link.icon}</span>
-          {link.label}
         </NavLink>
       ))}
     </nav>
