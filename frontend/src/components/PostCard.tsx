@@ -112,7 +112,7 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
 
       {/* Caption */}
       {post.caption_kind === 'text' && post.caption_text && (
-        <p className="mt-3 whitespace-pre-wrap break-words text-ink">{post.caption_text}</p>
+        <p className="mt-3 whitespace-pre-wrap wrap-break-words text-ink">{post.caption_text}</p>
       )}
       {post.caption_kind === 'drawing' && post.caption_path && (
         <img
