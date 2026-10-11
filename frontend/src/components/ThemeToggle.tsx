@@ -1,9 +1,7 @@
 import { useState } from 'react'
 
-export default function ThemeToggle() {
-  const [dark, setDark] = useState(() =>
-    document.documentElement.classList.contains('dark'),
-  )
+export default function ThemeToggle({ className = '' }: { className?: string }) {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
 
   function toggle() {
     const next = !dark
@@ -20,7 +18,8 @@ export default function ThemeToggle() {
     <button
       onClick={toggle}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="fixed top-4 right-4 rounded-full border border-line bg-card p-2 text-xl hover:scale-110 active:scale-95 transition"
+      title={dark ? 'Light mode' : 'Dark mode'}
+      className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl hover:bg-page active:scale-90 transition ${className}`}
     >
       {dark ? '☀️' : '🌙'}
     </button>

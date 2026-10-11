@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router'
+import { Link, NavLink } from 'react-router'
+import Logo from './Logo'
+import ThemeToggle from './ThemeToggle'
 
 const iconProps = {
   className: 'h-7 w-7',
@@ -55,9 +57,9 @@ const links = [
 export default function NavBar() {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:left-0 md:right-auto md:w-20 md:flex-col md:items-center md:gap-2 md:border-t-0 md:border-r md:py-6">
-      <span className="hidden pb-6 text-3xl font-bold text-brand md:block" aria-label="Tonal">
-        T
-      </span>
+      <Link to="/" aria-label="Tonal home" className="hidden pb-8 md:block">
+        <Logo className="h-10 w-10" />
+      </Link>
 
       {links.map((link) => (
         <NavLink
@@ -75,6 +77,11 @@ export default function NavBar() {
           <span className="transition group-active:scale-90">{link.icon}</span>
         </NavLink>
       ))}
+
+      {/* Light/dark switch sits at the bottom of the desktop rail */}
+      <div className="hidden md:mt-auto md:block">
+        <ThemeToggle />
+      </div>
     </nav>
   )
 }

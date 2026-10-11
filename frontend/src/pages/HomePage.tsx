@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import PostCard from '../components/PostCard'
 import type { Post } from '../components/PostCard'
+import StoryBar from '../components/StoryBar'
 
 const PAGE_SIZE = 10
 const POST_FIELDS =
@@ -113,6 +114,7 @@ export default function HomePage({ userId }: { userId: string }) {
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
+      <StoryBar userId={userId} />
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       {posts.length === 0 ? (

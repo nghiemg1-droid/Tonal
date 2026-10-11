@@ -42,6 +42,22 @@ function fileUrl(path: string) {
   return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
 }
 
+function CommentIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-6 w-6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.4A8.5 8.5 0 1 1 21 12Z" />
+    </svg>
+  )
+}
+
 type Props = {
   post: Post
   userId: string
@@ -49,6 +65,7 @@ type Props = {
 }
 
 export default function PostCard({ post, userId, onDeleted }: Props) {
+  const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -77,23 +94,46 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
   }
 
   return (
-    <article className="w-full rounded-2xl border border-line bg-card p-4 shadow-sm animate-fade-up">
+    <article className="w-full border-b border-line pb-5 animate-fade-up">
       <header className="mb-3 flex items-center gap-3">
-        <Avatar name={name} url={post.author.avatar_url} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-ink">{name}</p>
-          <p className="truncate text-sm text-muted">
-            @{post.author.username} · {timeAgo(post.created_at)}
-          </p>
-        </div>
+        <span className="rounded-full bg-brand p-0.5">
+          <span className="block rounded-full border-2 border-page">
+            <Avatar name={name} url={post.author.avatar_url} className="h-8 w-8 text-sm" />
+          </span>
+        </span>
+
+        <p className="min-w-0 flex-1 truncate text-sm">
+          <span className="font-semibold text-ink">{post.author.username}</span>
+          <span className="text-muted"> • {timeAgo(post.created_at)}</span>
+        </p>
+
         {isMine && (
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-full px-3 py-1 text-sm text-muted hover:bg-page hover:text-red-500 disabled:opacity-50 transition"
-          >
-            {deleting ? '...' : 'Delete'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="More options"
+              className="rounded-full px-2 py-1 text-muted hover:text-ink transition"
+            >
+              •••
+            </button>
+            {menuOpen && (
+              <div className="absolute top-8 right-0 z-20 w-36 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-red-500 hover:bg-page disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  className="block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-page"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </header>
 
@@ -106,36 +146,46 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
           src={mediaUrl}
           alt={`Photo by ${name}`}
           loading="lazy"
-          className="max-h-144 w-full rounded-xl bg-page object-cover"
+          className="max-h-144 w-full rounded-md border border-line bg-card object-cover"
         />
       )}
 
-      {/* Caption */}
-      {post.caption_kind === 'text' && post.caption_text && (
-        <p className="mt-3 whitespace-pre-wrap wrap-break-words text-ink">{post.caption_text}</p>
-      )}
-      {post.caption_kind === 'drawing' && post.caption_path && (
-        <img
-          src={fileUrl(post.caption_path)}
-          alt={`Drawing by ${name}`}
-          loading="lazy"
-          className="mt-3 w-40 rounded-xl border border-line"
-        />
-      )}
-      {post.caption_kind === 'voice' && post.caption_path && (
-        <div className="mt-3">
-          <VoicePlayer src={fileUrl(post.caption_path)} durationMs={post.caption_duration_ms ?? 0} />
-        </div>
-      )}
-
-      <footer className="mt-2 flex items-center">
+      <footer className="mt-2 -ml-3 flex items-center">
         <LikeButton
           postId={post.id}
           userId={userId}
           initialLiked={post.liked_by_me}
           initialCount={post.like_count}
         />
+        <button
+          disabled
+          aria-label="Comments (coming soon)"
+          title="Comments are coming soon"
+          className="rounded-full px-3 py-1.5 text-muted opacity-60"
+        >
+          <CommentIcon />
+        </button>
       </footer>
+
+      {/* Caption */}
+      {post.caption_kind === 'text' && post.caption_text && (
+        <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-ink">
+          <span className="font-semibold">{post.author.username}</span> {post.caption_text}
+        </p>
+      )}
+      {post.caption_kind === 'drawing' && post.caption_path && (
+        <img
+          src={fileUrl(post.caption_path)}
+          alt={`Drawing by ${name}`}
+          loading="lazy"
+          className="mt-2 w-40 rounded-xl border border-line"
+        />
+      )}
+      {post.caption_kind === 'voice' && post.caption_path && (
+        <div className="mt-2">
+          <VoicePlayer src={fileUrl(post.caption_path)} durationMs={post.caption_duration_ms ?? 0} />
+        </div>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
     </article>
