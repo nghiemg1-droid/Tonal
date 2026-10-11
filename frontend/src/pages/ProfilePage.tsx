@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase'
 import ProfileEditor from '../components/ProfileEditor'
+import BlockedAccounts from '../components/BlockedAccounts'
+import DeleteAccount from '../components/DeleteAccount'
 
 export default function ProfilePage({ userId }: { userId: string }) {
   return (
@@ -11,6 +13,10 @@ export default function ProfilePage({ userId }: { userId: string }) {
       >
         Log out
       </button>
+
+      {/* Settings */}
+      <BlockedAccounts userId={userId} />
+      <DeleteAccount userId={userId} />
     </div>
   )
 }

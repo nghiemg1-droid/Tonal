@@ -164,6 +164,10 @@ export default function HomePage({ userId }: { userId: string }) {
             onDeleted={removePost}
             storyGroup={groups.get(post.author.id)}
             onOpenStory={setViewingStory}
+            onBlocked={(authorId) => {
+              setPosts((prev) => prev.filter((p) => p.author.id !== authorId))
+              reloadStories()
+            }}
           />
         ))
       )}

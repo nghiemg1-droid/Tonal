@@ -6,6 +6,8 @@ import VoicePlayer from './VoicePlayer'
 import LikeButton from './LikeButton'
 import ImageWithSound from './ImageWithSound'
 import CommentSection from './CommentSection'
+import ReportDialog from './ReportDialog'
+import { blockUser } from '../lib/safety'
 import { StoryRing } from './StoryBar'
 import type { StoryGroup } from './StoryViewer'
 
@@ -57,14 +59,16 @@ type Props = {
   onDeleted: (id: string) => void
   storyGroup?: StoryGroup
   onOpenStory: (group: StoryGroup) => void
+  onBlocked?: (authorId: string) => void
 }
 
-export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenStory }: Props) {
+export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenStory, onBlocked }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showComments, setShowComments] = useState(false)
   const [commentCount, setCommentCount] = useState(post.comment_count)
+  const [reporting, setReporting] = useState(false)
 
   const isMine = post.author.id === userId
   const mediaUrl = fileUrl(post.media_path)
@@ -90,6 +94,19 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
     onDeleted(post.id)
   }
 
+  async function handleBlock() {
+    setMenuOpen(false)
+    if (!window.confirm(`Block @${post.author.username}? You won't see each other's posts or stories, and they can't message you.`)) return
+    try {
+      await blockUser(userId, post.author.id)
+      onBlocked?.(post.author.id)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  const menuItem = 'block w-full px-4 py-2.5 text-left text-sm hover:bg-page disabled:opacity-50'
+
   return (
     <article className="w-full border-b border-line pb-5 animate-fade-up">
       <header className="mb-3 flex items-center gap-3">
@@ -114,35 +131,57 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
           <span className="text-muted"> • {timeAgo(post.created_at)}</span>
         </p>
 
-        {isMine && (
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-label="More options"
-              className="rounded-full px-2 py-1 text-muted hover:text-ink transition"
-            >
-              •••
-            </button>
-            {menuOpen && (
-              <div className="absolute top-8 right-0 z-20 w-36 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label="More options"
+            className="rounded-full px-2 py-1 text-muted hover:text-ink transition"
+          >
+            •••
+          </button>
+          {menuOpen && (
+            <div className="absolute top-8 right-0 z-20 w-48 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
+              {isMine ? (
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
-                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-red-500 hover:bg-page disabled:opacity-50"
+                  className={`${menuItem} font-semibold text-red-500`}
                 >
                   {deleting ? 'Deleting...' : 'Delete'}
                 </button>
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-page"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setReporting(true)
+                    }}
+                    className={`${menuItem} font-semibold text-red-500`}
+                  >
+                    Report
+                  </button>
+                  <button onClick={handleBlock} className={`${menuItem} text-red-500`}>
+                    Block @{post.author.username}
+                  </button>
+                </>
+              )}
+              <button onClick={() => setMenuOpen(false)} className={`${menuItem} text-ink`}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </header>
+
+      {reporting && (
+        <ReportDialog
+          userId={userId}
+          targetType="post"
+          targetId={post.id}
+          label="post"
+          onClose={() => setReporting(false)}
+        />
+      )}
 
       {post.kind === 'voice' ? (
         <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />

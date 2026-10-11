@@ -15,6 +15,9 @@ import VoiceRecorder from '../components/VoiceRecorder'
 import type { Recording } from '../components/VoiceRecorder'
 import DrawingPad from '../components/DrawingPad'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import ReportDialog from '../components/ReportDialog'
+import { blockUser, unblockUser } from '../lib/safety'
+import type { ReportTarget } from '../lib/safety'
 
 type Message = {
   id: string
@@ -142,6 +145,9 @@ export default function ChatPage({ userId }: { userId: string }) {
   const [recording, setRecording] = useState<Recording | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [showInfo, setShowInfo] = useState(false)
+  const [headerMenu, setHeaderMenu] = useState(false)
+  const [blockedByMe, setBlockedByMe] = useState(false)
+  const [report, setReport] = useState<{ type: ReportTarget; id: string; label: string } | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -360,6 +366,46 @@ export default function ChatPage({ userId }: { userId: string }) {
     window.scrollTo({ top: document.body.scrollHeight, behavior: first ? 'auto' : 'smooth' })
   }, [messages])
 
+  // 1-to-1 chat: did I block this person?
+  const partnerId = info && !info.is_group ? info.members.find((m) => m.user_id !== userId)?.user_id : undefined
+  useEffect(() => {
+    if (!partnerId) {
+      setBlockedByMe(false)
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('blocks')
+      .select('blocked_id')
+      .eq('blocker_id', userId)
+      .eq('blocked_id', partnerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setBlockedByMe(!!data)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [partnerId, userId])
+
+  async function toggleBlock() {
+    setHeaderMenu(false)
+    if (!partnerId) return
+    try {
+      if (blockedByMe) {
+        await unblockUser(userId, partnerId)
+        setBlockedByMe(false)
+      } else {
+        if (!window.confirm("Block this account? They won't be able to message you or see your posts.")) return
+        await blockUser(userId, partnerId)
+        setBlockedByMe(true)
+        setPanel('none')
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   // Coming back to this tab counts as reading
   useEffect(() => {
     function onVisible() {
@@ -434,7 +480,10 @@ export default function ChatPage({ userId }: { userId: string }) {
     try {
       await task()
     } catch (err) {
-      setError((err as Error).message)
+      const message = (err as Error).message
+      setError(
+        message.includes('row-level security') ? "You can't send messages in this chat." : message,
+      )
     }
     setSending(false)
   }
@@ -671,7 +720,53 @@ export default function ChatPage({ userId }: { userId: string }) {
             i
           </button>
         )}
+        {info && !info.is_group && partnerId && (
+          <div className="relative">
+            <button
+              onClick={() => setHeaderMenu((v) => !v)}
+              aria-label="Chat options"
+              className="rounded-full px-2 py-1 text-muted hover:text-ink"
+            >
+              •••
+            </button>
+            {headerMenu && (
+              <div className="absolute top-9 right-0 z-20 w-48 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
+                <button
+                  onClick={() => {
+                    setHeaderMenu(false)
+                    setReport({ type: 'user', id: partnerId, label: `@${others[0]?.username ?? 'user'}` })
+                  }}
+                  className="block w-full px-4 py-2.5 text-left text-sm font-semibold text-red-500 hover:bg-page"
+                >
+                  Report
+                </button>
+                <button
+                  onClick={toggleBlock}
+                  className="block w-full px-4 py-2.5 text-left text-sm text-red-500 hover:bg-page"
+                >
+                  {blockedByMe ? 'Unblock' : 'Block'}
+                </button>
+                <button
+                  onClick={() => setHeaderMenu(false)}
+                  className="block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-page"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {report && (
+        <ReportDialog
+          userId={userId}
+          targetType={report.type}
+          targetId={report.id}
+          label={report.label}
+          onClose={() => setReport(null)}
+        />
+      )}
 
       {showInfo && info?.is_group && (
         <GroupInfo
@@ -854,9 +949,19 @@ export default function ChatPage({ userId }: { userId: string }) {
                   >
                     Reply
                   </button>
-                  {mine && (
+                  {mine ? (
                     <button onClick={() => unsend(m)} className="px-2 text-xs font-medium text-red-500">
                       Unsend
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setMenuFor(null)
+                        setReport({ type: 'message', id: m.id, label: 'message' })
+                      }}
+                      className="px-2 text-xs font-medium text-red-500"
+                    >
+                      Report
                     </button>
                   )}
                   <span className="px-1 text-[10px] text-muted">{timeAgo(m.created_at)}</span>
@@ -1040,6 +1145,14 @@ export default function ChatPage({ userId }: { userId: string }) {
           </div>
         )}
 
+        {blockedByMe ? (
+          <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-sm">
+            <span className="text-muted">You blocked this account.</span>
+            <button onClick={toggleBlock} className="font-semibold text-brand">
+              Unblock
+            </button>
+          </div>
+        ) : (
         <form onSubmit={sendText} className="flex items-center gap-1">
           <label className={`${iconButton} cursor-pointer`} aria-label="Send a photo">
             📷
@@ -1097,6 +1210,7 @@ export default function ChatPage({ userId }: { userId: string }) {
             Send
           </button>
         </form>
+        )}
 
         {error && <p className="px-2 text-xs text-red-500">{error}</p>}
       </div>

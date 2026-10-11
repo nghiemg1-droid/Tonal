@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { startChat } from '../lib/chat'
+import { loadMyBlocks } from '../lib/safety'
 import Avatar from './Avatar'
 
 type Result = {
@@ -22,9 +23,15 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
   const [results, setResults] = useState<Result[]>([])
   const [searched, setSearched] = useState(false)
   const [following, setFollowing] = useState<Set<string>>(new Set())
+  const [blocked, setBlocked] = useState<Set<string>>(new Set())
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  // People I blocked don't show up in search
+  useEffect(() => {
+    loadMyBlocks(userId).then(setBlocked)
+  }, [userId])
 
   // Load the list of people I already follow
   useEffect(() => {
@@ -56,7 +63,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
       setError(error.message)
       return
     }
-    setResults(data ?? [])
+    setResults((data ?? []).filter((person) => !blocked.has(person.id)))
     setSearched(true)
   }
 
