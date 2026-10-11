@@ -3,7 +3,7 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string): Promise<Blob | n
 }
 
 // Prefer WebP; fall back to JPEG on browsers that can't make WebP
-async function encodeCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
+export async function encodeCanvas(canvas: HTMLCanvasElement): Promise<Blob> {
   let blob = await canvasToBlob(canvas, 'image/webp')
   if (!blob || blob.type !== 'image/webp') {
     blob = await canvasToBlob(canvas, 'image/jpeg')

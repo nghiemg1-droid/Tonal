@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
-import { makePostImage } from '../lib/image'
+import { encodeCanvas, makePostImage } from '../lib/image'
 import VoiceRecorder from '../components/VoiceRecorder'
 import type { Recording } from '../components/VoiceRecorder'
+import DrawingPad from '../components/DrawingPad'
 
 type Mode = 'voice' | 'image'
+type CaptionMode = 'none' | 'text' | 'drawing' | 'voice'
+
+const CAPTION_MAX = 300
 
 function audioExtension(mime: string) {
   if (mime.includes('mp4')) return 'm4a'
@@ -22,10 +26,21 @@ function baseType(blob: Blob, fallback: string) {
 export default function CreatePostPage({ userId }: { userId: string }) {
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('voice')
+
+  // Voice post
   const [recording, setRecording] = useState<Recording | null>(null)
+
+  // Image post
   const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imageAudio, setImageAudio] = useState<Recording | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [imageAudio, setImageAudio] = useState<Recording | null>(null)
+
+  // Caption (image posts only)
+  const [captionMode, setCaptionMode] = useState<CaptionMode>('none')
+  const [captionInput, setCaptionInput] = useState('')
+  const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null)
+  const [captionVoice, setCaptionVoice] = useState<Recording | null>(null)
+
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,53 +75,74 @@ export default function CreatePostPage({ userId }: { userId: string }) {
     setError(null)
     const uploaded: string[] = [] // so we can clean up if something fails
 
+    async function upload(blob: Blob, contentType: string, ext: string) {
+      const path = `${userId}/${crypto.randomUUID()}.${ext}`
+      const { error } = await supabase.storage.from('posts').upload(path, blob, { contentType })
+      if (error) throw new Error(error.message)
+      uploaded.push(path)
+      return path
+    }
+
     try {
-      let mainBlob: Blob
-      let mainType: string
-      let mainExt: string
+      let mediaPath: string
       let audioPath: string | null = null
       let durationMs: number | null = null
+      let captionKind: Exclude<CaptionMode, 'none'> | null = null
+      let captionText: string | null = null
+      let captionPath: string | null = null
+      let captionDurationMs: number | null = null
 
       if (mode === 'voice') {
         if (!recording) return
-        mainBlob = recording.blob
-        mainType = baseType(mainBlob, 'audio/webm')
-        mainExt = audioExtension(mainType)
+        const type = baseType(recording.blob, 'audio/webm')
+        mediaPath = await upload(recording.blob, type, audioExtension(type))
         durationMs = recording.durationMs
       } else {
         if (!imageFile) return
-        mainBlob = await makePostImage(imageFile) // shrink + strip GPS
-        mainType = mainBlob.type
-        mainExt = mainType === 'image/webp' ? 'webp' : 'jpg'
+
+        // 1. The photo (shrunk, GPS removed)
+        const photo = await makePostImage(imageFile)
+        mediaPath = await upload(photo, photo.type, photo.type === 'image/webp' ? 'webp' : 'jpg')
+
+        // 2. Optional background sound
+        if (imageAudio) {
+          const type = baseType(imageAudio.blob, 'audio/webm')
+          audioPath = await upload(imageAudio.blob, type, audioExtension(type))
+          durationMs = imageAudio.durationMs
+        }
+
+        // 3. Optional caption
+        const text = captionInput.trim()
+        if (captionMode === 'text' && text) {
+          captionKind = 'text'
+          captionText = text
+        } else if (captionMode === 'drawing' && drawingCanvas) {
+          const drawing = await encodeCanvas(drawingCanvas)
+          captionKind = 'drawing'
+          captionPath = await upload(
+            drawing,
+            drawing.type,
+            drawing.type === 'image/webp' ? 'webp' : 'jpg',
+          )
+        } else if (captionMode === 'voice' && captionVoice) {
+          const type = baseType(captionVoice.blob, 'audio/webm')
+          captionKind = 'voice'
+          captionPath = await upload(captionVoice.blob, type, audioExtension(type))
+          captionDurationMs = captionVoice.durationMs
+        }
       }
 
-      // 1. Upload the main file (voice or photo)
-      const mainPath = `${userId}/${crypto.randomUUID()}.${mainExt}`
-      const { error: mainError } = await supabase.storage
-        .from('posts')
-        .upload(mainPath, mainBlob, { contentType: mainType })
-      if (mainError) throw new Error(mainError.message)
-      uploaded.push(mainPath)
-
-      // 2. Photo with sound: upload the sound too
-      if (mode === 'image' && imageAudio) {
-        const audioType = baseType(imageAudio.blob, 'audio/webm')
-        audioPath = `${userId}/${crypto.randomUUID()}.${audioExtension(audioType)}`
-        const { error: audioError } = await supabase.storage
-          .from('posts')
-          .upload(audioPath, imageAudio.blob, { contentType: audioType })
-        if (audioError) throw new Error(audioError.message)
-        uploaded.push(audioPath)
-        durationMs = imageAudio.durationMs
-      }
-
-      // 3. Save the post in the database
+      // 4. Save the post in the database
       const { error: insertError } = await supabase.from('posts').insert({
         author_id: userId,
         kind: mode,
-        media_path: mainPath,
+        media_path: mediaPath,
         audio_path: audioPath,
         duration_ms: durationMs,
+        caption_kind: captionKind,
+        caption_text: captionText,
+        caption_path: captionPath,
+        caption_duration_ms: captionDurationMs,
       })
       if (insertError) throw new Error(insertError.message)
 
@@ -139,7 +175,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         </button>
       </div>
 
-      {/* Both stay mounted so switching tabs doesn't lose your recording or photo */}
+      {/* Everything stays mounted so switching tabs doesn't lose your work */}
       <div className={mode === 'voice' ? '' : 'hidden'}>
         <VoiceRecorder onChange={setRecording} />
       </div>
@@ -157,11 +193,57 @@ export default function CreatePostPage({ userId }: { userId: string }) {
               <input type="file" accept="image/*" onChange={handleImageChange} className="sr-only" />
             </label>
 
+            {/* Background sound */}
             <div className="mt-2 w-full border-t border-line pt-4">
               <p className="mb-3 text-center text-sm text-muted">
-                Add your voice or a song you made <span className="opacity-70">(optional)</span>
+                Background sound: your voice or a song you made{' '}
+                <span className="opacity-70">(optional)</span>
               </p>
               <VoiceRecorder onChange={setImageAudio} />
+            </div>
+
+            {/* Caption */}
+            <div className="mt-2 flex w-full flex-col gap-3 border-t border-line pt-4">
+              <p className="text-center text-sm text-muted">
+                Caption <span className="opacity-70">(optional)</span>
+              </p>
+
+              <div className="flex gap-1 rounded-full bg-page p-1 text-sm">
+                <button type="button" onClick={() => setCaptionMode('none')} className={tabClass(captionMode === 'none')}>
+                  None
+                </button>
+                <button type="button" onClick={() => setCaptionMode('text')} className={tabClass(captionMode === 'text')}>
+                  Aa
+                </button>
+                <button type="button" onClick={() => setCaptionMode('drawing')} className={tabClass(captionMode === 'drawing')}>
+                  ✏️
+                </button>
+                <button type="button" onClick={() => setCaptionMode('voice')} className={tabClass(captionMode === 'voice')}>
+                  🎙️
+                </button>
+              </div>
+
+              <div className={captionMode === 'text' ? '' : 'hidden'}>
+                <textarea
+                  value={captionInput}
+                  onChange={(e) => setCaptionInput(e.target.value)}
+                  maxLength={CAPTION_MAX}
+                  rows={3}
+                  placeholder="Write a caption..."
+                  className="w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+                />
+                <p className="text-right text-xs text-muted">
+                  {captionInput.length}/{CAPTION_MAX}
+                </p>
+              </div>
+
+              <div className={captionMode === 'drawing' ? '' : 'hidden'}>
+                <DrawingPad onChange={setDrawingCanvas} />
+              </div>
+
+              <div className={captionMode === 'voice' ? '' : 'hidden'}>
+                <VoiceRecorder onChange={setCaptionVoice} />
+              </div>
             </div>
           </>
         ) : (

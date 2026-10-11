@@ -4,12 +4,17 @@ import Avatar from './Avatar'
 import VoicePlayer from './VoicePlayer'
 import LikeButton from './LikeButton'
 import ImageWithSound from './ImageWithSound'
+
 export type Post = {
   id: string
   kind: 'voice' | 'image'
   media_path: string
   audio_path: string | null
   duration_ms: number | null
+  caption_kind: 'text' | 'drawing' | 'voice' | null
+  caption_text: string | null
+  caption_path: string | null
+  caption_duration_ms: number | null
   created_at: string
   like_count: number
   liked_by_me: boolean
@@ -33,6 +38,10 @@ function timeAgo(iso: string) {
   return new Date(iso).toLocaleDateString()
 }
 
+function fileUrl(path: string) {
+  return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
+}
+
 type Props = {
   post: Post
   userId: string
@@ -44,7 +53,7 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
   const [error, setError] = useState<string | null>(null)
 
   const isMine = post.author.id === userId
-  const mediaUrl = supabase.storage.from('posts').getPublicUrl(post.media_path).data.publicUrl
+  const mediaUrl = fileUrl(post.media_path)
   const name = post.author.display_name || post.author.username
 
   async function handleDelete() {
@@ -58,7 +67,11 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
       setDeleting(false)
       return
     }
-    const files = post.audio_path ? [post.media_path, post.audio_path] : [post.media_path]
+
+    // Remove every file of this post, so they don't waste storage
+    const files = [post.media_path, post.audio_path, post.caption_path].filter(
+      (path): path is string => path !== null,
+    )
     await supabase.storage.from('posts').remove(files)
     onDeleted(post.id)
   }
@@ -86,14 +99,8 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
 
       {post.kind === 'voice' ? (
         <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />
-            
       ) : post.audio_path ? (
-        <ImageWithSound
-          imageUrl={mediaUrl}
-          audioUrl={supabase.storage.from('posts').getPublicUrl(post.audio_path).data.publicUrl}
-          alt={`Photo by ${name}`}
-        />
-      
+        <ImageWithSound imageUrl={mediaUrl} audioUrl={fileUrl(post.audio_path)} alt={`Photo by ${name}`} />
       ) : (
         <img
           src={mediaUrl}
@@ -101,6 +108,24 @@ export default function PostCard({ post, userId, onDeleted }: Props) {
           loading="lazy"
           className="max-h-144 w-full rounded-xl bg-page object-cover"
         />
+      )}
+
+      {/* Caption */}
+      {post.caption_kind === 'text' && post.caption_text && (
+        <p className="mt-3 whitespace-pre-wrap break-words text-ink">{post.caption_text}</p>
+      )}
+      {post.caption_kind === 'drawing' && post.caption_path && (
+        <img
+          src={fileUrl(post.caption_path)}
+          alt={`Drawing by ${name}`}
+          loading="lazy"
+          className="mt-3 w-40 rounded-xl border border-line"
+        />
+      )}
+      {post.caption_kind === 'voice' && post.caption_path && (
+        <div className="mt-3">
+          <VoicePlayer src={fileUrl(post.caption_path)} durationMs={post.caption_duration_ms ?? 0} />
+        </div>
       )}
 
       <footer className="mt-2 flex items-center">
