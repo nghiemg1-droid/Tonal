@@ -14,6 +14,7 @@ export type Story = {
   id: string
   media_path: string
   created_at: string
+  seen: boolean
 }
 
 export type StoryGroup = {
@@ -28,10 +29,19 @@ type Props = {
   isMine: boolean
   onClose: () => void
   onDeleted: () => void
+  onSeen?: (storyId: string) => void
 }
 
-export default function StoryViewer({ group, isMine, onClose, onDeleted }: Props) {
-  const [index, setIndex] = useState(0)
+type Viewer = Person & { viewed_at: string }
+
+export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen }: Props) {
+  // Start at the first story I haven't seen yet (like Instagram)
+  const [index, setIndex] = useState(() => {
+    const firstUnseen = group.stories.findIndex((s) => !s.seen)
+    return firstUnseen === -1 ? 0 : firstUnseen
+  })
+  const [viewers, setViewers] = useState<Viewer[] | null>(null)
+  const [showViewers, setShowViewers] = useState(false)
   const [progress, setProgress] = useState(0) // 0 → 1 for the current photo
   const [paused, setPaused] = useState(false)
   const elapsedRef = useRef(0)
@@ -72,6 +82,37 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted }: Props
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
   }, [paused, index])
+
+  // Mark the story on screen as seen (not my own)
+  const storyId = group.stories[index]?.id
+  useEffect(() => {
+    if (!storyId || isMine) return
+    onSeen?.(storyId)
+    // viewer_id is filled in by the database (it's always "me")
+    // 23505 = already seen before, that's fine
+    supabase.from('story_views').insert({ story_id: storyId }).then(() => {})
+  }, [storyId, isMine, onSeen])
+
+  // My own story: load who has seen it
+  useEffect(() => {
+    if (!storyId || !isMine) return
+    let cancelled = false
+    setViewers(null)
+    setShowViewers(false)
+    supabase
+      .from('story_views')
+      .select('viewed_at, viewer:profiles!story_views_viewer_id_fkey(id, username, display_name, avatar_url)')
+      .eq('story_id', storyId)
+      .order('viewed_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return
+        const rows = (data ?? []) as unknown as { viewed_at: string; viewer: Person }[]
+        setViewers(rows.map((row) => ({ ...row.viewer, viewed_at: row.viewed_at })))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [storyId, isMine])
 
   // Keyboard: Esc closes, arrows move
   useEffect(() => {
@@ -179,6 +220,46 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted }: Props
           onClick={() => tap(1)}
           className="absolute top-16 right-0 bottom-0 w-1/2"
         />
+
+        {/* My story: "Seen by N" at the bottom */}
+        {isMine && viewers && (
+          <button
+            onClick={() => {
+              setShowViewers((v) => !v)
+              setPaused((p) => !p)
+            }}
+            className="absolute bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-10 flex items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5 text-sm text-white"
+          >
+            👁 {viewers.length === 0 ? 'No views yet' : `Seen by ${viewers.length}`}
+          </button>
+        )}
+
+        {isMine && showViewers && viewers && viewers.length > 0 && (
+          <div className="absolute inset-x-0 bottom-0 z-20 max-h-[50%] overflow-y-auto rounded-t-2xl bg-card p-4 pb-[max(1rem,env(safe-area-inset-bottom))] animate-fade-up">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="font-semibold text-ink">Seen by {viewers.length}</p>
+              <button
+                onClick={() => {
+                  setShowViewers(false)
+                  setPaused(false)
+                }}
+                aria-label="Close"
+                className="text-xl text-muted"
+              >
+                ×
+              </button>
+            </div>
+            <ul className="flex flex-col gap-3">
+              {viewers.map((v) => (
+                <li key={v.id} className="flex items-center gap-3">
+                  <Avatar name={v.display_name || v.username} url={v.avatar_url} className="h-9 w-9 text-sm" />
+                  <span className="flex-1 truncate text-sm text-ink">{v.username}</span>
+                  <span className="text-xs text-muted">{timeAgo(v.viewed_at)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   )

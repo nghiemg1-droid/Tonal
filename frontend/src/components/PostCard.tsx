@@ -116,7 +116,7 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
             aria-label={`View ${post.author.username}'s story`}
             className="rounded-full"
           >
-            <StoryRing active>
+            <StoryRing active seen={storyGroup.stories.every((s) => s.seen)}>
               <Avatar name={name} url={post.author.avatar_url} className="h-8 w-8 text-sm" />
             </StoryRing>
           </button>

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { cleanUsernameQuery } from './search'
 
 export type Person = {
   id: string
@@ -22,8 +23,7 @@ export async function startChat(otherId: string): Promise<string> {
 
 // Find people by username, leaving out the ids in `exclude`
 export async function searchPeople(query: string, exclude: string[]): Promise<Person[]> {
-  // Usernames only contain a-z, 0-9 and _, so drop everything else
-  const clean = query.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+  const clean = cleanUsernameQuery(query)
   if (!clean) return []
 
   const { data, error } = await supabase

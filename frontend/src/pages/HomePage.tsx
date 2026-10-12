@@ -58,7 +58,7 @@ export default function HomePage({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   // Stories: one source for both the story bar and the rings on posts
-  const { me, groups, reload: reloadStories } = useStories(userId)
+  const { me, groups, reload: reloadStories, markSeen } = useStories(userId)
   const [viewingStory, setViewingStory] = useState<StoryGroup | null>(null)
 
   // First page: me + everyone I follow
@@ -189,6 +189,7 @@ export default function HomePage({ userId }: { userId: string }) {
           group={viewingStory}
           isMine={viewingStory.person.id === userId}
           onClose={() => setViewingStory(null)}
+          onSeen={markSeen}
           onDeleted={() => {
             setViewingStory(null)
             reloadStories()

@@ -4,11 +4,19 @@ import { supabase } from '../lib/supabase'
 import Avatar from './Avatar'
 import StoryEditor from './StoryEditor'
 import type { Person, StoryGroup } from './StoryViewer'
+import { allSeen } from '../hooks/useStories'
 
-// Red ring when the person has a story, no ring when they don't
-export function StoryRing({ active, children }: { active: boolean; children: ReactNode }) {
+type RingProps = {
+  active: boolean
+  seen?: boolean
+  children: ReactNode
+}
+
+// Red ring = new story, gray ring = you've seen it all, no ring = no story
+export function StoryRing({ active, seen = false, children }: RingProps) {
+  const color = !active ? '' : seen ? 'bg-line' : 'bg-brand'
   return (
-    <span className={`block rounded-full p-0.5 ${active ? 'bg-brand' : ''}`}>
+    <span className={`block rounded-full p-0.5 ${color}`}>
       <span className="block rounded-full border-2 border-page">{children}</span>
     </span>
   )
@@ -107,14 +115,16 @@ export default function StoryBar({ userId, me, groups, onChanged, onOpen }: Prop
             onClick={() => onOpen(group)}
             className="flex w-16 shrink-0 flex-col items-center gap-1"
           >
-            <StoryRing active>
+            <StoryRing active seen={allSeen(group)}>
               <Avatar
                 name={group.person.display_name || group.person.username}
                 url={group.person.avatar_url}
                 className="h-14 w-14 text-xl"
               />
             </StoryRing>
-            <span className="w-full truncate text-center text-xs text-ink">{group.person.username}</span>
+            <span className={`w-full truncate text-center text-xs ${allSeen(group) ? 'text-muted' : 'text-ink'}`}>
+              {group.person.username}
+            </span>
           </button>
         ))}
       </div>

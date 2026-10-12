@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
+import { cleanUsernameQuery } from '../lib/search'
 import { startChat } from '../lib/chat'
 import { loadMyBlocks } from '../lib/safety'
 import Avatar from './Avatar'
@@ -46,8 +47,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
 
   async function handleSearch(e: FormEvent) {
     e.preventDefault()
-    // Usernames only contain a-z, 0-9 and _, so drop everything else
-    const clean = query.trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+    const clean = cleanUsernameQuery(query)
     if (!clean) return
 
     setError(null)

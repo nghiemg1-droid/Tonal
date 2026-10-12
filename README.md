@@ -1,5 +1,7 @@
 # Tonal
 
+[![CI](https://github.com/nghiemg1-droid/Tonal/actions/workflows/ci.yml/badge.svg)](https://github.com/nghiemg1-droid/Tonal/actions/workflows/ci.yml)
+
 A social media app where posts, comments and direct messages are shared through **voice and images** instead of text.
 
 ## Features (planned)
