@@ -16,6 +16,8 @@ import type { Recording } from '../components/VoiceRecorder'
 import DrawingPad from '../components/DrawingPad'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import ReportDialog from '../components/ReportDialog'
+import ThemePicker from '../components/ThemePicker'
+import { getChatTheme } from '../lib/chatThemes'
 import { blockUser, unblockUser } from '../lib/safety'
 import type { ReportTarget } from '../lib/safety'
 import {
@@ -37,6 +39,7 @@ type Info = {
   id: string
   is_group: boolean
   name: string | null
+  theme: string
   members: ChatMember[]
 }
 
@@ -119,6 +122,7 @@ export default function ChatPage({ userId }: { userId: string }) {
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [showInfo, setShowInfo] = useState(false)
   const [headerMenu, setHeaderMenu] = useState(false)
+  const [pickingTheme, setPickingTheme] = useState(false)
   const [blockedByMe, setBlockedByMe] = useState(false)
   const [report, setReport] = useState<{ type: ReportTarget; id: string; label: string } | null>(null)
   const [sending, setSending] = useState(false)
@@ -240,7 +244,7 @@ export default function ChatPage({ userId }: { userId: string }) {
     const { data, error } = await supabase
       .from('conversations')
       .select(
-        `id, is_group, name, members:conversation_members(user_id, role, last_read_at, profile:profiles(${PERSON_FIELDS}))`,
+        `id, is_group, name, theme, members:conversation_members(user_id, role, last_read_at, profile:profiles(${PERSON_FIELDS}))`,
       )
       .eq('id', conversationId)
       .maybeSingle()
@@ -322,6 +326,15 @@ export default function ChatPage({ userId }: { userId: string }) {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'message_views', filter },
         (payload) => setViews((prev) => addView(prev, payload.new as View)),
+      )
+      // Someone changed the chat theme
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversations', filter: `id=eq.${conversationId}` },
+        (payload) => {
+          const theme = (payload.new as { theme?: string }).theme
+          if (theme) setInfo((prev) => (prev ? { ...prev, theme } : prev))
+        },
       )
       // "Seen": someone's last_read_at moved forward
       .on(
@@ -411,6 +424,13 @@ export default function ChatPage({ userId }: { userId: string }) {
     } catch (err) {
       setError((err as Error).message)
     }
+  }
+
+  async function pickTheme(id: string) {
+    setPickingTheme(false)
+    setInfo((prev) => (prev ? { ...prev, theme: id } : prev))
+    const { error } = await supabase.rpc('set_conversation_theme', { conv: conversationId, new_theme: id })
+    if (error) setError(error.message)
   }
 
   // Coming back to this tab counts as reading
@@ -695,15 +715,27 @@ export default function ChatPage({ userId }: { userId: string }) {
         : 'Tonal user'
     : ''
   const byId = new Map(messages.map((m) => [m.id, m]))
+  const theme = getChatTheme(info?.theme)
   // no display class here, so each button can choose flex / hidden
   const iconBase =
     'h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl hover:bg-page active:scale-90 disabled:opacity-40 transition'
   const iconButton = `flex ${iconBase}`
 
   return (
-    <div className="flex w-full flex-col gap-3">
+    <div className="relative z-[1] flex w-full flex-col gap-3">
+      {/* Chat background fills the whole screen behind the messages */}
+      {theme.background && (
+        <div className="pointer-events-none fixed inset-0 z-[-1]" style={{ background: theme.background }} aria-hidden />
+      )}
+      {pickingTheme && info && (
+        <ThemePicker current={info.theme} onPick={pickTheme} onClose={() => setPickingTheme(false)} />
+      )}
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-line pb-3">
+      <div
+        className={`flex items-center gap-3 ${
+          theme.background ? 'rounded-2xl bg-card/90 px-3 py-2 shadow-sm backdrop-blur' : 'border-b border-line pb-3'
+        }`}
+      >
         <Link to="/messages" aria-label="Back" className="text-3xl leading-none text-muted hover:text-ink">
           ‹
         </Link>
@@ -721,6 +753,16 @@ export default function ChatPage({ userId }: { userId: string }) {
             <p className="truncate text-xs text-muted">@{others[0].username}</p>
           )}
         </div>
+        {info && (
+          <button
+            onClick={() => setPickingTheme(true)}
+            aria-label="Chat theme"
+            title="Chat theme"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-lg hover:bg-page"
+          >
+            🎨
+          </button>
+        )}
         {info?.is_group && (
           <button
             onClick={() => setShowInfo((v) => !v)}
@@ -859,7 +901,10 @@ export default function ChatPage({ userId }: { userId: string }) {
                         Message unsent
                       </span>
                     ) : m.kind === 'text' ? (
-                      <span className={`block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 ${bubbleBase}`}>
+                      <span
+                        className={`block whitespace-pre-wrap break-words rounded-2xl px-3 py-2 ${bubbleBase}`}
+                        style={mine && theme.bubble ? { backgroundColor: theme.bubble } : undefined}
+                      >
                         {m.body}
                       </span>
                     ) : m.kind === 'sticker' ? (
@@ -907,7 +952,10 @@ export default function ChatPage({ userId }: { userId: string }) {
                   )}
 
                   {!m.deleted_at && m.kind === 'file' && (
-                    <div className={`flex w-64 items-center gap-3 rounded-2xl px-3 py-2.5 ${bubbleBase}`}>
+                    <div
+                      className={`flex w-64 items-center gap-3 rounded-2xl px-3 py-2.5 ${bubbleBase}`}
+                      style={mine && theme.bubble ? { backgroundColor: theme.bubble } : undefined}
+                    >
                       <span className="text-2xl">📎</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{m.body}</p>

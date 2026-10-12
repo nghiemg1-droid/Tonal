@@ -32,7 +32,8 @@ function Privacy() {
         <ul className="list-disc space-y-1 pl-5">
           <li>
             <b>Account:</b> your email address and password (the password is stored only as a secure hash
-            by our login provider).
+            by our login provider), or your phone number if you log in by phone. Your phone number is used
+            only to send you login codes and is never shown to other users.
           </li>
           <li>
             <b>Profile:</b> username, display name and profile photo.
