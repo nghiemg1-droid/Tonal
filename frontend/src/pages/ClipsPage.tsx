@@ -9,6 +9,7 @@ import Avatar from '../components/Avatar'
 import VideoPlayer from '../components/VideoPlayer'
 import LikeButton from '../components/LikeButton'
 import CommentSection from '../components/CommentSection'
+import RichText from '../components/RichText'
 
 const PAGE = 8
 
@@ -95,7 +96,11 @@ export default function ClipsPage({ userId }: { userId: string }) {
                 <Avatar name={name} url={clip.author.avatar_url} className="h-9 w-9 text-sm ring-2 ring-white" />
                 <span className="font-semibold">{clip.author.username}</span>
               </Link>
-              {clip.caption_text && <p className="mt-2 line-clamp-3 text-sm">{clip.caption_text}</p>}
+              {clip.caption_text && (
+                <p className="pointer-events-auto mt-2 line-clamp-3 text-sm">
+                  <RichText text={clip.caption_text} />
+                </p>
+              )}
             </div>
 
             {/* Actions on the right */}

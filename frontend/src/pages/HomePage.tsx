@@ -164,6 +164,7 @@ export default function HomePage({ userId }: { userId: string }) {
           isMine={viewingStory.person.id === userId}
           onClose={() => setViewingStory(null)}
           onSeen={markSeen}
+          userId={userId}
           onDeleted={() => {
             setViewingStory(null)
             reloadStories()

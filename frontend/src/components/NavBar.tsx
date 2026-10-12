@@ -84,7 +84,7 @@ const links = [
   { to: '/profile', label: 'Profile', icon: <ProfileIcon /> },
 ]
 
-export default function NavBar({ unread }: { unread: number }) {
+export default function NavBar({ unread, unreadChats = 0 }: { unread: number; unreadChats?: number }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-line bg-card pb-[env(safe-area-inset-bottom)] md:inset-y-0 md:left-0 md:right-auto md:w-20 md:flex-col md:items-center md:gap-2 md:border-t-0 md:border-r md:py-6">
       <Link to="/" aria-label="Tonal home" className="hidden pb-8 md:block">
@@ -92,13 +92,14 @@ export default function NavBar({ unread }: { unread: number }) {
       </Link>
 
       {links.map((link) => {
-        const showBadge = link.to === '/notifications' && unread > 0
+        const badge = link.to === '/notifications' ? unread : link.to === '/messages' ? unreadChats : 0
+        const showBadge = badge > 0
         return (
           <NavLink
             key={link.to}
             to={link.to}
             end={link.to === '/'}
-            aria-label={showBadge ? `${link.label} (${unread} new)` : link.label}
+            aria-label={showBadge ? `${link.label} (${badge} new)` : link.label}
             title={link.label}
             className={({ isActive }) =>
               `group ${link.desktopOnly ? 'hidden md:flex' : 'flex'} flex-1 items-center justify-center py-3 transition md:h-12 md:w-12 md:flex-none md:rounded-xl md:py-0 md:hover:bg-page ${
@@ -110,7 +111,7 @@ export default function NavBar({ unread }: { unread: number }) {
               {link.icon}
               {showBadge && (
                 <span className="absolute -top-1.5 -right-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-card bg-brand px-1 text-[10px] font-bold text-white animate-fade-up">
-                  {unread > 9 ? '9+' : unread}
+                  {badge > 9 ? '9+' : badge}
                 </span>
               )}
             </span>

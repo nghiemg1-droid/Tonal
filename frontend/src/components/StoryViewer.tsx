@@ -6,6 +6,9 @@ import MusicCredit from './MusicCredit'
 import { columnsToTrack } from '../lib/music'
 import type { MusicColumns } from '../lib/music'
 import { playExclusive } from '../lib/playback'
+import { startChat } from '../lib/chat'
+
+const QUICK_REACTIONS = ['😂', '😮', '😍', '😢', '👏', '🔥']
 
 export type Person = {
   id: string
@@ -47,11 +50,12 @@ type Props = {
   onClose: () => void
   onDeleted: () => void
   onSeen?: (storyId: string) => void
+  userId?: string // needed to reply to someone else's story
 }
 
 type Viewer = Person & { viewed_at: string }
 
-export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen }: Props) {
+export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen, userId }: Props) {
   // Start at the first story I haven't seen yet (like Instagram)
   const [index, setIndex] = useState(() => {
     const firstUnseen = group.stories.findIndex((s) => !s.seen)
@@ -59,6 +63,8 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
   })
   const [viewers, setViewers] = useState<Viewer[] | null>(null)
   const [showViewers, setShowViewers] = useState(false)
+  const [reply, setReply] = useState('')
+  const [replyStatus, setReplyStatus] = useState<string | null>(null)
   const [progress, setProgress] = useState(0) // 0 → 1 for the current photo
   const [paused, setPaused] = useState(false)
   const elapsedRef = useRef(0)
@@ -154,6 +160,30 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
     const audio = audioRef.current
     return () => audio?.pause()
   }, [])
+
+  // Reply to the story: it arrives in your chat with this person, with the story attached
+  async function sendReply(text: string) {
+    const body = text.trim()
+    if (!body || !userId || !story) return
+    try {
+      const conversationId = await startChat(group.person.id)
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: userId,
+        kind: 'text',
+        body,
+        story_id: story.id,
+      })
+      if (error) throw error
+      setReply('')
+      setReplyStatus('Sent ✓')
+    } catch (err) {
+      const message = (err as Error).message
+      setReplyStatus(message.includes('row-level security') || message.includes("can't message") ? "Can't reply to this story" : message)
+    }
+    setPaused(false)
+    window.setTimeout(() => setReplyStatus(null), 2000)
+  }
 
   // Keyboard: Esc closes, arrows move
   useEffect(() => {
@@ -274,7 +304,7 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
           onPointerUp={pressEnd}
           onPointerLeave={pressEnd}
           onClick={() => tap(-1)}
-          className="absolute top-16 bottom-0 left-0 w-1/2"
+          className={`absolute top-16 left-0 w-1/2 ${isMine ? 'bottom-0' : 'bottom-24'}`}
         />
         <button
           aria-label="Next"
@@ -282,8 +312,47 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
           onPointerUp={pressEnd}
           onPointerLeave={pressEnd}
           onClick={() => tap(1)}
-          className="absolute top-16 right-0 bottom-0 w-1/2"
+          className={`absolute top-16 right-0 w-1/2 ${isMine ? 'bottom-0' : 'bottom-24'}`}
         />
+
+        {/* Someone else's story: reply or react */}
+        {!isMine && userId && (
+          <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-2 bg-gradient-to-t from-black/60 to-transparent p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            {replyStatus ? (
+              <p className="text-center text-sm text-white">{replyStatus}</p>
+            ) : (
+              <div className="flex justify-center gap-3 text-2xl">
+                {QUICK_REACTIONS.map((emoji) => (
+                  <button key={emoji} onClick={() => sendReply(emoji)} className="transition hover:scale-125 active:scale-90">
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendReply(reply)
+              }}
+              className="flex gap-2"
+            >
+              <input
+                value={reply}
+                onChange={(e) => setReply(e.target.value)}
+                onFocus={() => setPaused(true)}
+                onBlur={() => !reply && setPaused(false)}
+                maxLength={500}
+                placeholder={`Reply to ${group.person.username}…`}
+                className="min-w-0 flex-1 rounded-full border border-white/60 bg-transparent px-4 py-2 text-sm text-white placeholder:text-white/70 focus:outline-none"
+              />
+              {reply.trim() && (
+                <button type="submit" className="px-2 text-sm font-semibold text-white">
+                  Send
+                </button>
+              )}
+            </form>
+          </div>
+        )}
 
         {/* My story: "Seen by N" at the bottom */}
         {isMine && viewers && (

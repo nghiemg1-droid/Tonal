@@ -4,7 +4,7 @@ export type Message = {
   id: string
   conversation_id: string
   sender_id: string
-  kind: 'text' | 'voice' | 'image' | 'sticker' | 'drawing' | 'file'
+  kind: 'text' | 'voice' | 'image' | 'sticker' | 'drawing' | 'file' | 'share'
   body: string | null
   media_path: string | null
   duration_ms: number | null
@@ -12,6 +12,8 @@ export type Message = {
   reply_to_id: string | null
   deleted_at: string | null
   view_once: boolean
+  story_id?: string | null
+  post_id?: string | null
   created_at: string
 }
 
@@ -76,6 +78,7 @@ export function audioExtension(mime: string): string {
 // One line describing a message (reply quotes, inbox)
 export function preview(m: Message): string {
   if (m.deleted_at) return 'Message unsent'
+  if (m.kind === 'share') return '📤 Shared a post'
   if (m.kind === 'text' || m.kind === 'sticker') return m.body ?? ''
   if (m.kind === 'voice') return '🎙️ Voice message'
   if (m.kind === 'drawing') return '✏️ Drawing'

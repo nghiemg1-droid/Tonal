@@ -14,12 +14,13 @@ A social app built around **voice, photos, short videos and drawings**. Share a 
 - Profile pages with bio, followers/following lists and a post grid; Explore grid and a page for every post
 - Captions as text, a drawing or a voice note
 - Likes with an animated heart, and comments as text, voice, photo or drawing
+- #Hashtags (with a page per tag), @mentions that notify people, saved posts, editable captions and sharing posts into chats
 - Notifications for likes, comments and new followers, updated in real time
 
 **Stories**
 - 24-hour stories with an editor for text, stickers, multiple photos, music or your own voice
 - Red ring for new stories, gray ring once you've seen them all
-- "Seen by" list on your own stories
+- "Seen by" list on your own stories, and replies or quick reactions that arrive as chat messages
 
 **Messages**
 - One-to-one and group chats (up to 32 people) with real-time delivery
@@ -101,7 +102,6 @@ CI runs all of these, plus a production build, on every push.
 
 ## Roadmap
 
-- Hashtags, mentions and saved posts
 - Voice and video calls
 - Native mobile app
 

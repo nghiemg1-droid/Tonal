@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import RichText from './RichText'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { encodeCanvas, makePostImage } from '../lib/image'
@@ -226,7 +227,9 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
                   </p>
                   <div className="mt-1">
                     {comment.kind === 'text' ? (
-                      <p className="whitespace-pre-wrap wrap-break-word text-sm text-ink">{comment.body}</p>
+                      <p className="whitespace-pre-wrap wrap-break-word text-sm text-ink">
+                        <RichText text={comment.body ?? ''} />
+                      </p>
                     ) : comment.kind === 'voice' && comment.media_path ? (
                       <VoicePlayer
                         src={fileUrl(comment.media_path)}

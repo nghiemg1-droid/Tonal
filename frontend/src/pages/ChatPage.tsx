@@ -41,11 +41,53 @@ type Info = {
 }
 
 const MESSAGE_FIELDS =
-  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, file_size, reply_to_id, deleted_at, view_once, created_at'
+  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, file_size, reply_to_id, deleted_at, view_once, story_id, post_id, created_at'
 const PAGE = 40
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
 const FILE_ACCEPT = '.pdf,.txt,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx'
 const STICKERS = ['🎉', '🔥', '🥳', '😍', '🤣', '😭', '🙏', '👏', '💯', '✨', '🎶', '🌹', '🐶', '🐱', '🍕', '☕']
+
+type SharedPost = {
+  id: string
+  kind: 'voice' | 'image' | 'video'
+  media_path: string
+  poster_path: string | null
+  caption_text: string | null
+  author: { username: string } | null
+}
+
+// A post someone shared in the chat (undefined = loading, null = deleted or hidden)
+function SharedPostCard({ post, note, mine }: { post: SharedPost | null | undefined; note: string | null; mine: boolean }) {
+  const thumb =
+    post && post.kind !== 'voice'
+      ? supabase.storage.from('posts').getPublicUrl(post.kind === 'video' ? (post.poster_path ?? '') : post.media_path).data.publicUrl
+      : null
+  return (
+    <div className={`flex w-56 flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
+      {post ? (
+        <Link to={`/p/${post.id}`} className="w-full overflow-hidden rounded-2xl border border-line bg-card">
+          <p className="px-3 py-2 text-xs font-semibold text-ink">@{post.author?.username}</p>
+          {thumb ? (
+            <img src={thumb} alt="" className="aspect-square w-full object-cover" />
+          ) : (
+            <div className="flex aspect-[2/1] items-center justify-center bg-brand/15 text-3xl">🎙️</div>
+          )}
+          {post.caption_text && <p className="line-clamp-2 px-3 py-2 text-xs text-ink">{post.caption_text}</p>}
+          {post.kind === 'video' && <p className="px-3 pb-2 text-xs text-muted">▶ Video</p>}
+        </Link>
+      ) : (
+        <span className="rounded-2xl border border-line px-3 py-2 text-xs italic text-muted">
+          {post === undefined ? 'Loading post…' : 'This post is no longer available'}
+        </span>
+      )}
+      {note && (
+        <span className={`rounded-2xl px-3 py-2 text-sm ${mine ? 'bg-brand text-white' : 'border border-line bg-card text-ink'}`}>
+          {note}
+        </span>
+      )}
+    </div>
+  )
+}
 
 export default function ChatPage({ userId }: { userId: string }) {
   const { conversationId = '' } = useParams()
@@ -110,6 +152,38 @@ export default function ChatPage({ userId }: { userId: string }) {
     setPeople((prev) => ({ ...prev, ...next }))
   }, [])
 
+  // Shared posts and replied-to stories shown inside messages
+  const [sharedPosts, setSharedPosts] = useState<Record<string, SharedPost | null>>({})
+  const [stories, setStories] = useState<Record<string, string | null>>({})
+  const askedRef = useRef<Set<string>>(new Set())
+
+  const loadAttachments = useCallback(async (list: Message[]) => {
+    const postIds = [...new Set(list.flatMap((m) => (m.post_id ? [m.post_id] : [])))].filter(
+      (id) => !askedRef.current.has(id),
+    )
+    const storyIds = [...new Set(list.flatMap((m) => (m.story_id ? [m.story_id] : [])))].filter(
+      (id) => !askedRef.current.has(id),
+    )
+    postIds.concat(storyIds).forEach((id) => askedRef.current.add(id))
+
+    if (postIds.length) {
+      const { data } = await supabase
+        .from('posts')
+        .select('id, kind, media_path, poster_path, caption_text, author:profiles!posts_author_id_fkey(username)')
+        .in('id', postIds)
+      const found: Record<string, SharedPost | null> = Object.fromEntries(postIds.map((id) => [id, null]))
+      for (const p of (data ?? []) as unknown as SharedPost[]) found[p.id] = p
+      setSharedPosts((prev) => ({ ...prev, ...found }))
+    }
+    if (storyIds.length) {
+      // Stories older than 24 hours aren't visible any more
+      const { data } = await supabase.from('stories').select('id, media_path').in('id', storyIds)
+      const found: Record<string, string | null> = Object.fromEntries(storyIds.map((id) => [id, null]))
+      for (const s of data ?? []) found[s.id as string] = s.media_path as string
+      setStories((prev) => ({ ...prev, ...found }))
+    }
+  }, [])
+
   const markRead = useCallback(async () => {
     await supabase.rpc('mark_conversation_read', { conv: conversationId })
   }, [conversationId])
@@ -119,8 +193,9 @@ export default function ChatPage({ userId }: { userId: string }) {
       setMessages((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]))
       signUrls(normalPaths([m]))
       ensurePeople([m.sender_id])
+      loadAttachments([m])
     },
-    [signUrls, ensurePeople],
+    [signUrls, ensurePeople, loadAttachments],
   )
 
   // Load a page of messages older than `before` (or the newest page)
@@ -205,6 +280,7 @@ export default function ChatPage({ userId }: { userId: string }) {
         setReactions(reactionRows.reduce(applyReaction, {}))
         setViews(viewRows.reduce(addView, {}))
         signUrls(normalPaths(page))
+        loadAttachments(page)
         ensurePeople(page.map((m) => m.sender_id))
         markRead()
       } catch (err) {
@@ -375,6 +451,7 @@ export default function ChatPage({ userId }: { userId: string }) {
       setReactions((prev) => reactionRows.reduce(applyReaction, prev))
       setViews((prev) => viewRows.reduce(addView, prev))
       signUrls(normalPaths(page))
+      loadAttachments(page)
       ensurePeople(page.map((m) => m.sender_id))
     } catch (err) {
       setError((err as Error).message)
@@ -749,6 +826,22 @@ export default function ChatPage({ userId }: { userId: string }) {
                 )}
 
                 <div className={`flex min-w-0 flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                  {m.story_id !== undefined && m.story_id !== null && !m.deleted_at && (
+                    <div className={`mb-1 flex items-center gap-2 text-xs text-muted ${mine ? 'flex-row-reverse' : ''}`}>
+                      {stories[m.story_id] ? (
+                        <img
+                          src={supabase.storage.from('stories').getPublicUrl(stories[m.story_id] as string).data.publicUrl}
+                          alt="Story"
+                          className="h-20 w-12 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-20 w-12 items-center justify-center rounded-lg bg-page text-center text-[10px]">
+                          Story ended
+                        </span>
+                      )}
+                      <span>{mine ? 'You replied to their story' : 'Replied to your story'}</span>
+                    </div>
+                  )}
                   {m.reply_to_id && !m.deleted_at && (
                     <span className="mb-0.5 max-w-full truncate rounded-xl bg-page px-3 py-1 text-xs text-muted">
                       ↩ {replied ? `${personName(people[replied.sender_id] ?? { id: '', username: 'someone', display_name: null, avatar_url: null })}: ${preview(replied)}` : 'Original message'}
@@ -807,6 +900,10 @@ export default function ChatPage({ userId }: { userId: string }) {
                         •••
                       </button>
                     </div>
+                  )}
+
+                  {!m.deleted_at && m.kind === 'share' && m.post_id && (
+                    <SharedPostCard post={sharedPosts[m.post_id]} note={m.body} mine={mine} />
                   )}
 
                   {!m.deleted_at && m.kind === 'file' && (

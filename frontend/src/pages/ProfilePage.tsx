@@ -13,6 +13,13 @@ export default function ProfilePage({ userId }: { userId: string }) {
     <div className="flex w-full flex-col items-center gap-4">
       <ProfileEditor userId={userId} />
 
+      <Link
+        to="/saved"
+        className="flex w-full max-w-sm items-center justify-center gap-2 rounded-xl border border-line bg-card py-2 text-sm font-medium text-ink hover:bg-page"
+      >
+        🔖 Saved posts
+      </Link>
+
       {/* My posts */}
       <section className="flex w-full flex-col gap-2">
         {!loading && posts.length === 0 && (

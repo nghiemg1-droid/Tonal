@@ -21,11 +21,19 @@ export async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post
     .in('post_id', rows.map((row) => row.id))
   const likedByMe = new Set((data ?? []).map((row) => row.post_id))
 
+  const { data: savedRows } = await supabase
+    .from('saved_posts')
+    .select('post_id')
+    .eq('user_id', userId)
+    .in('post_id', rows.map((row) => row.id))
+  const savedByMe = new Set((savedRows ?? []).map((row) => row.post_id))
+
   return rows.map(({ likes, comments, ...post }) => ({
     ...post,
     like_count: likes[0]?.count ?? 0,
     comment_count: comments[0]?.count ?? 0,
     liked_by_me: likedByMe.has(post.id),
+    saved_by_me: savedByMe.has(post.id),
   }))
 }
 

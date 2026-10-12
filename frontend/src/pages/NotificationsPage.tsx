@@ -6,7 +6,7 @@ import Avatar from '../components/Avatar'
 
 type Notification = {
   id: string
-  type: 'like' | 'comment' | 'follow'
+  type: 'like' | 'comment' | 'follow' | 'mention'
   read_at: string | null
   created_at: string
   actor: {
@@ -30,6 +30,7 @@ const MESSAGES = {
   like: 'liked your post.',
   comment: 'commented on your post.',
   follow: 'started following you.',
+  mention: 'mentioned you.',
 }
 
 type Props = {

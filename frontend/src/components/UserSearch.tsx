@@ -47,6 +47,12 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
 
   async function handleSearch(e: FormEvent) {
     e.preventDefault()
+    // "#something" searches a hashtag
+    const raw = query.trim()
+    if (raw.startsWith('#') && raw.length > 1) {
+      navigate(`/tags/${encodeURIComponent(raw.slice(1).toLowerCase())}`)
+      return
+    }
     const clean = cleanUsernameQuery(query)
     if (!clean) return
 
@@ -117,7 +123,7 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by username"
+          placeholder="Search people or #hashtags"
           className="min-w-0 flex-1 rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <button

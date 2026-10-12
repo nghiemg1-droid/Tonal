@@ -4,6 +4,8 @@ import { columnsToTrack } from '../lib/music'
 import type { MusicColumns } from '../lib/music'
 import MusicCredit from './MusicCredit'
 import VideoPlayer from './VideoPlayer'
+import RichText from './RichText'
+import SharePostDialog from './SharePostDialog'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
@@ -30,6 +32,7 @@ export type Post = Partial<MusicColumns> & {
   created_at: string
   like_count: number
   liked_by_me: boolean
+  saved_by_me?: boolean
   comment_count: number
   author: {
     id: string
@@ -84,6 +87,12 @@ export default function PostCard({
   const [showComments, setShowComments] = useState(initialShowComments)
   const [commentCount, setCommentCount] = useState(post.comment_count)
   const [reporting, setReporting] = useState(false)
+  const [saved, setSaved] = useState(!!post.saved_by_me)
+  const [sharing, setSharing] = useState(false)
+  const [caption, setCaption] = useState(post.caption_kind === 'text' ? (post.caption_text ?? '') : '')
+  const [editingCaption, setEditingCaption] = useState(false)
+  const [captionDraft, setCaptionDraft] = useState('')
+  const canEditCaption = post.caption_kind === null || post.caption_kind === 'text'
 
   const isMine = post.author.id === userId
   const mediaUrl = fileUrl(post.media_path)
@@ -119,6 +128,29 @@ export default function PostCard({
     } catch (err) {
       setError((err as Error).message)
     }
+  }
+
+  async function toggleSave() {
+    const next = !saved
+    setSaved(next)
+    const { error } = next
+      ? await supabase.from('saved_posts').insert({ post_id: post.id })
+      : await supabase.from('saved_posts').delete().eq('post_id', post.id).eq('user_id', userId)
+    if (error && error.code !== '23505') setSaved(!next)
+  }
+
+  async function saveCaption() {
+    const text = captionDraft.trim()
+    const { error } = await supabase
+      .from('posts')
+      .update({ caption_kind: text ? 'text' : null, caption_text: text || null })
+      .eq('id', post.id)
+    if (error) {
+      setError(error.message)
+      return
+    }
+    setCaption(text)
+    setEditingCaption(false)
   }
 
   const menuItem = 'block w-full px-4 py-2.5 text-left text-sm hover:bg-page disabled:opacity-50'
@@ -163,13 +195,27 @@ export default function PostCard({
           {menuOpen && (
             <div className="absolute top-8 right-0 z-20 w-48 overflow-hidden rounded-xl border border-line bg-card shadow-lg">
               {isMine ? (
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className={`${menuItem} font-semibold text-red-500`}
-                >
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </button>
+                <>
+                  {canEditCaption && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false)
+                        setCaptionDraft(caption)
+                        setEditingCaption(true)
+                      }}
+                      className={`${menuItem} text-ink`}
+                    >
+                      Edit caption
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className={`${menuItem} font-semibold text-red-500`}
+                  >
+                    {deleting ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
               ) : (
                 <>
                   <button
@@ -245,15 +291,58 @@ export default function PostCard({
           <CommentIcon />
           <span className="text-sm tabular-nums">{commentCount}</span>
         </button>
+        <button
+          onClick={() => setSharing(true)}
+          aria-label="Share"
+          className="rounded-full px-3 py-1.5 text-muted hover:bg-page active:scale-90 transition"
+        >
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="m22 2-7 20-4-9-9-4Z" />
+            <path d="M22 2 11 13" />
+          </svg>
+        </button>
+        <button
+          onClick={toggleSave}
+          aria-label={saved ? 'Remove from saved' : 'Save'}
+          className={`ml-auto rounded-full px-3 py-1.5 hover:bg-page active:scale-90 transition ${saved ? 'text-ink' : 'text-muted'}`}
+        >
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+            <path d="M19 21 12 16 5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
       </footer>
 
+      {sharing && <SharePostDialog userId={userId} postId={post.id} onClose={() => setSharing(false)} />}
+
+      {editingCaption && (
+        <div className="mt-2 flex flex-col gap-2">
+          <textarea
+            value={captionDraft}
+            onChange={(e) => setCaptionDraft(e.target.value)}
+            maxLength={300}
+            rows={3}
+            autoFocus
+            placeholder="Write a caption… use #hashtags and @mentions"
+            className="w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+          />
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setEditingCaption(false)} className="rounded-full border border-line px-4 py-1 text-sm text-ink">
+              Cancel
+            </button>
+            <button onClick={saveCaption} className="rounded-full bg-brand px-4 py-1 text-sm font-medium text-white">
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Caption */}
-      {post.caption_kind === 'text' && post.caption_text && (
+      {caption && !editingCaption && (
         <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-ink">
           <Link to={`/u/${post.author.username}`} className="font-semibold hover:underline">
             {post.author.username}
           </Link>{' '}
-          {post.caption_text}
+          <RichText text={caption} />
         </p>
       )}
       {post.caption_kind === 'drawing' && post.caption_path && (

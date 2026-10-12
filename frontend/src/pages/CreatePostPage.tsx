@@ -245,7 +245,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
               onChange={(e) => setVideoCaption(e.target.value)}
               maxLength={300}
               rows={2}
-              placeholder="Write a caption… (optional)"
+              placeholder="Write a caption… use #hashtags and @mentions (optional)"
               className="w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
             />
           </>
@@ -361,7 +361,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
                   onChange={(e) => setCaptionInput(e.target.value)}
                   maxLength={CAPTION_MAX}
                   rows={3}
-                  placeholder="Write a caption..."
+                  placeholder="Write a caption… use #hashtags and @mentions"
                   className="w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
                 />
                 <p className="text-right text-xs text-muted">

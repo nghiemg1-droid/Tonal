@@ -3,6 +3,7 @@ import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { useUnreadCount } from './hooks/useUnreadCount'
+import { useUnreadChats } from './hooks/useUnreadChats'
 import AuthForm from './components/AuthForm'
 import ThemeToggle from './components/ThemeToggle'
 import NavBar, { MessagesIcon } from './components/NavBar'
@@ -21,16 +22,27 @@ import LegalPage from './pages/LegalPage'
 import UserProfilePage from './pages/UserProfilePage'
 import PostPage from './pages/PostPage'
 import ClipsPage from './pages/ClipsPage'
+import TagPage from './pages/TagPage'
+import SavedPage from './pages/SavedPage'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
   const [unread, setUnread] = useUnreadCount(userId)
+  const unreadChats = useUnreadChats(userId)
   const markSeen = useCallback(() => setUnread(0), [setUnread])
+
+  // Housekeeping: delete my stories that ended, and their files, so storage stays small
+  useEffect(() => {
+    supabase.rpc('cleanup_my_expired_stories').then(({ data }) => {
+      const paths = (data ?? []) as string[]
+      if (paths.length > 0) supabase.storage.from('stories').remove(paths)
+    })
+  }, [userId])
 
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-page md:pl-20">
-        <NavBar unread={unread} />
+        <NavBar unread={unread} unreadChats={unreadChats} />
 
         {/* Phone: top bar with the logo and the light/dark switch */}
         <header className="sticky top-0 z-10 flex pt-[env(safe-area-inset-top)] items-center justify-between border-b border-line bg-card px-4 py-1 md:hidden">
@@ -40,7 +52,14 @@ function LoggedInApp({ userId }: { userId: string }) {
           </span>
           <span className="flex items-center gap-1">
             <Link to="/messages" aria-label="Messages" className="p-2 text-ink">
-              <MessagesIcon className="h-6 w-6" />
+              <span className="relative block">
+                <MessagesIcon className="h-6 w-6" />
+                {unreadChats > 0 && (
+                  <span className="absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-card bg-brand px-0.5 text-[9px] font-bold text-white">
+                    {unreadChats > 9 ? '9+' : unreadChats}
+                  </span>
+                )}
+              </span>
             </Link>
             <ThemeToggle />
           </span>
@@ -66,6 +85,8 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/messages/:conversationId" element={<ChatPage userId={userId} />} />
               <Route path="/profile" element={<ProfilePage userId={userId} />} />
               <Route path="/clips" element={<ClipsPage userId={userId} />} />
+              <Route path="/tags/:tag" element={<TagPage />} />
+              <Route path="/saved" element={<SavedPage userId={userId} />} />
               <Route path="/u/:username" element={<UserProfilePage userId={userId} />} />
               <Route path="/p/:postId" element={<PostPage userId={userId} />} />
               <Route path="/privacy" element={<LegalPage kind="privacy" />} />
