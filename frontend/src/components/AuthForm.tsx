@@ -73,6 +73,18 @@ export default function AuthForm() {
           ? "Don't have an account? Sign up"
           : 'Already have an account? Log in'}
       </button>
+
+      <p className="text-center text-xs text-muted">
+        {mode === 'signup' ? 'By signing up, you agree to our ' : ''}
+        <a href="/terms" className="underline hover:text-brand">
+          Terms
+        </a>{' '}
+        and{' '}
+        <a href="/privacy" className="underline hover:text-brand">
+          Privacy Policy
+        </a>
+        .
+      </p>
     </form>
   )
 }

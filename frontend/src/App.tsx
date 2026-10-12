@@ -17,6 +17,7 @@ import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import ChatPage from './pages/ChatPage'
 import NewGroupPage from './pages/NewGroupPage'
+import LegalPage from './pages/LegalPage'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
@@ -61,6 +62,8 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/messages/new-group" element={<NewGroupPage userId={userId} />} />
               <Route path="/messages/:conversationId" element={<ChatPage userId={userId} />} />
               <Route path="/profile" element={<ProfilePage userId={userId} />} />
+              <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+              <Route path="/terms" element={<LegalPage kind="terms" />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
@@ -102,6 +105,18 @@ function App() {
         <Logo className="h-16 w-16 animate-pulse" />
       </main>
     )
+  }
+
+  // Logged out: the Privacy Policy and Terms pages are still readable
+  if (!session) {
+    const path = window.location.pathname
+    if (path === '/privacy' || path === '/terms') {
+      return (
+        <main className="flex min-h-screen justify-center bg-page px-4 py-10">
+          <LegalPage kind={path === '/privacy' ? 'privacy' : 'terms'} />
+        </main>
+      )
+    }
   }
 
   // Logged out: welcome + login form

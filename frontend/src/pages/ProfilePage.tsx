@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import ProfileEditor from '../components/ProfileEditor'
 import BlockedAccounts from '../components/BlockedAccounts'
@@ -17,6 +18,16 @@ export default function ProfilePage({ userId }: { userId: string }) {
       {/* Settings */}
       <BlockedAccounts userId={userId} />
       <DeleteAccount userId={userId} />
+
+      <p className="text-xs text-muted">
+        <Link to="/privacy" className="hover:text-brand">
+          Privacy Policy
+        </Link>
+        {' · '}
+        <Link to="/terms" className="hover:text-brand">
+          Terms of Use
+        </Link>
+      </p>
     </div>
   )
 }
