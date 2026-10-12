@@ -46,6 +46,16 @@ export function MessagesIcon({ className = 'h-7 w-7' }: { className?: string }) 
   )
 }
 
+function ClipsIcon() {
+  return (
+    <svg {...iconProps}>
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <path d="M3 8h18M8 3l3 5M14 3l3 5" />
+      <path d="m10 11.5 4.5 2.5-4.5 2.5z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function HeartIcon() {
   return (
     <svg {...iconProps}>
@@ -66,6 +76,7 @@ function ProfileIcon() {
 const links = [
   { to: '/', label: 'Home', icon: <HomeIcon /> },
   { to: '/search', label: 'Search', icon: <SearchIcon /> },
+  { to: '/clips', label: 'Clips', icon: <ClipsIcon /> },
   { to: '/new', label: 'New post', icon: <NewIcon /> },
   // On phones Messages lives in the top bar instead
   { to: '/messages', label: 'Messages', icon: <MessagesIcon />, desktopOnly: true },

@@ -20,6 +20,7 @@ import NewGroupPage from './pages/NewGroupPage'
 import LegalPage from './pages/LegalPage'
 import UserProfilePage from './pages/UserProfilePage'
 import PostPage from './pages/PostPage'
+import ClipsPage from './pages/ClipsPage'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
@@ -64,6 +65,7 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/messages/new-group" element={<NewGroupPage userId={userId} />} />
               <Route path="/messages/:conversationId" element={<ChatPage userId={userId} />} />
               <Route path="/profile" element={<ProfilePage userId={userId} />} />
+              <Route path="/clips" element={<ClipsPage userId={userId} />} />
               <Route path="/u/:username" element={<UserProfilePage userId={userId} />} />
               <Route path="/p/:postId" element={<PostPage userId={userId} />} />
               <Route path="/privacy" element={<LegalPage kind="privacy" />} />

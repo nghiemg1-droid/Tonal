@@ -9,9 +9,10 @@ import DrawingPad from '../components/DrawingPad'
 import MusicPicker from '../components/MusicPicker'
 import MusicCredit from '../components/MusicCredit'
 import { trackToColumns } from '../lib/music'
+import { checkVideoFile, MAX_VIDEO_MS, readVideo, videoExtension } from '../lib/video'
 import type { Track } from '../lib/music'
 
-type Mode = 'voice' | 'image'
+type Mode = 'voice' | 'image' | 'video'
 type CaptionMode = 'none' | 'text' | 'drawing' | 'voice'
 
 const CAPTION_MAX = 300
@@ -48,6 +49,11 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null)
   const [captionVoice, setCaptionVoice] = useState<Recording | null>(null)
 
+  // Video post
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  const [videoCaption, setVideoCaption] = useState('')
+
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,6 +63,30 @@ export default function CreatePostPage({ userId }: { userId: string }) {
       if (previewUrl) URL.revokeObjectURL(previewUrl)
     }
   }, [previewUrl])
+
+  // Preview link for the chosen video
+  useEffect(() => {
+    if (!videoFile) {
+      setVideoUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(videoFile)
+    setVideoUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [videoFile])
+
+  function handleVideoChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const problem = checkVideoFile(file)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    setError(null)
+    setVideoFile(file)
+  }
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -98,8 +128,22 @@ export default function CreatePostPage({ userId }: { userId: string }) {
       let captionText: string | null = null
       let captionPath: string | null = null
       let captionDurationMs: number | null = null
+      let posterPath: string | null = null
 
-      if (mode === 'voice') {
+      if (mode === 'video') {
+        if (!videoFile) return
+        // Length check + a still picture for the feed, made in the browser
+        const { durationMs: length, poster } = await readVideo(videoFile)
+        if (length > MAX_VIDEO_MS + 500) throw new Error('Videos can be up to 60 seconds. Try trimming it first.')
+        durationMs = Math.min(length, MAX_VIDEO_MS)
+        mediaPath = await upload(videoFile, videoFile.type, videoExtension(videoFile.type))
+        posterPath = await upload(poster, poster.type, poster.type === 'image/webp' ? 'webp' : 'jpg')
+        const text = videoCaption.trim()
+        if (text) {
+          captionKind = 'text'
+          captionText = text
+        }
+      } else if (mode === 'voice') {
         if (!recording) return
         const type = baseType(recording.blob, 'audio/webm')
         mediaPath = await upload(recording.blob, type, audioExtension(type))
@@ -150,6 +194,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         caption_text: captionText,
         caption_path: captionPath,
         caption_duration_ms: captionDurationMs,
+        poster_path: posterPath,
         ...trackToColumns(mode === 'image' && soundMode === 'music' ? music : null),
       })
       if (insertError) throw new Error(insertError.message)
@@ -164,7 +209,8 @@ export default function CreatePostPage({ userId }: { userId: string }) {
     }
   }
 
-  const canPost = mode === 'voice' ? recording !== null : imageFile !== null
+  const canPost =
+    mode === 'voice' ? recording !== null : mode === 'video' ? videoFile !== null : imageFile !== null
   const tabClass = (active: boolean) =>
     `flex-1 rounded-full py-1.5 text-center transition ${
       active ? 'bg-brand font-medium text-white' : 'text-muted hover:text-ink'
@@ -181,6 +227,36 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         <button type="button" onClick={() => setMode('image')} className={tabClass(mode === 'image')}>
           🖼️ Image
         </button>
+        <button type="button" onClick={() => setMode('video')} className={tabClass(mode === 'video')}>
+          🎬 Video
+        </button>
+      </div>
+
+      <div className={mode === 'video' ? 'flex flex-col items-center gap-3' : 'hidden'}>
+        {videoUrl ? (
+          <>
+            <video src={videoUrl} controls playsInline className="max-h-96 w-full rounded-xl bg-black" />
+            <label className="cursor-pointer rounded-full border border-line px-4 py-1.5 text-sm text-ink hover:bg-page active:scale-95 transition">
+              Choose another
+              <input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={handleVideoChange} className="sr-only" />
+            </label>
+            <textarea
+              value={videoCaption}
+              onChange={(e) => setVideoCaption(e.target.value)}
+              maxLength={300}
+              rows={2}
+              placeholder="Write a caption… (optional)"
+              className="w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+            />
+          </>
+        ) : (
+          <label className="flex h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line text-muted hover:border-brand hover:text-brand transition">
+            <span className="text-4xl">🎬</span>
+            Tap to choose a video
+            <span className="text-xs">Up to 60 seconds · 50 MB</span>
+            <input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={handleVideoChange} className="sr-only" />
+          </label>
+        )}
       </div>
 
       {/* Everything stays mounted so switching tabs doesn't lose your work */}
@@ -318,7 +394,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         disabled={!canPost || posting}
         className="rounded-full bg-brand py-2.5 font-medium text-white hover:bg-brand-dark active:scale-95 disabled:opacity-40 transition"
       >
-        {posting ? 'Posting...' : 'Post'}
+        {posting ? (mode === 'video' ? 'Uploading video…' : 'Posting...') : 'Post'}
       </button>
     </div>
   )

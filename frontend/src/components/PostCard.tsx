@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { columnsToTrack } from '../lib/music'
 import type { MusicColumns } from '../lib/music'
 import MusicCredit from './MusicCredit'
+import VideoPlayer from './VideoPlayer'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
@@ -17,7 +18,8 @@ import type { StoryGroup } from './StoryViewer'
 
 export type Post = Partial<MusicColumns> & {
   id: string
-  kind: 'voice' | 'image'
+  kind: 'voice' | 'image' | 'video'
+  poster_path?: string | null
   media_path: string
   audio_path: string | null
   duration_ms: number | null
@@ -101,7 +103,7 @@ export default function PostCard({
     }
 
     // Remove every file of this post, so they don't waste storage
-    const files = [post.media_path, post.audio_path, post.caption_path].filter(
+    const files = [post.media_path, post.audio_path, post.caption_path, post.poster_path ?? null].filter(
       (path): path is string => path !== null,
     )
     await supabase.storage.from('posts').remove(files)
@@ -202,7 +204,13 @@ export default function PostCard({
         />
       )}
 
-      {post.kind === 'voice' ? (
+      {post.kind === 'video' ? (
+        <VideoPlayer
+          src={mediaUrl}
+          poster={post.poster_path ? fileUrl(post.poster_path) : ''}
+          className="rounded-md border border-line"
+        />
+      ) : post.kind === 'voice' ? (
         <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />
       ) : post.audio_path || music ? (
         <ImageWithSound

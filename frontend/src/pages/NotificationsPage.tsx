@@ -17,13 +17,14 @@ type Notification = {
   }
   post: {
     id: string
-    kind: 'voice' | 'image'
+    kind: 'voice' | 'image' | 'video'
     media_path: string
+    poster_path: string | null
   } | null
 }
 
 const FIELDS =
-  'id, type, read_at, created_at, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), post:posts(id, kind, media_path)'
+  'id, type, read_at, created_at, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), post:posts(id, kind, media_path, poster_path)'
 
 const MESSAGES = {
   like: 'liked your post.',
@@ -109,9 +110,14 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
 
               {item.post && (
                 <Link to={`/p/${item.post.id}`} className="shrink-0">
-                {item.post.kind === 'image' ? (
+                {item.post.kind !== 'voice' ? (
                   <img
-                    src={supabase.storage.from('posts').getPublicUrl(item.post.media_path).data.publicUrl}
+                    src={
+                      supabase.storage
+                        .from('posts')
+                        .getPublicUrl(item.post.kind === 'video' ? (item.post.poster_path ?? '') : item.post.media_path)
+                        .data.publicUrl
+                    }
                     alt=""
                     className="h-11 w-11 shrink-0 rounded-md object-cover"
                   />
