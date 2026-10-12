@@ -4,7 +4,7 @@
 
 A social app built around **voice, photos and drawings**. Share a 60-second voice clip, a photo that plays a sound while it's on screen, or a hand-drawn caption — and talk to friends in real-time chats with voice messages, stickers and view-once photos.
 
-Installable on phones as a web app (PWA).
+**Live app: [tonal-six.vercel.app](https://tonal-six.vercel.app)** — installable on phones as a web app (PWA).
 
 ## Features
 
@@ -29,7 +29,7 @@ Installable on phones as a web app (PWA).
 - Block (hides content both ways and stops messages), report, and full account deletion
 - Photos are re-drawn in the browser before upload, which strips GPS and other hidden data
 - Chat files live in a private bucket and are only served through links that expire
-- [Privacy Policy](frontend/src/pages/LegalPage.tsx) and Terms pages in the app
+- [Privacy Policy](https://tonal-six.vercel.app/privacy) and [Terms](https://tonal-six.vercel.app/terms)
 
 ## Tech stack
 
