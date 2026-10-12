@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { encodeCanvas } from '../lib/image'
+import type { Track } from '../lib/music'
+import MusicPicker from './MusicPicker'
+import MusicCredit from './MusicCredit'
+import VoiceRecorder from './VoiceRecorder'
+import type { Recording } from './VoiceRecorder'
+
+// Sound that goes with the story: a song from the library OR your own voice
+export type StorySound = { music: Track | null; voice: Recording | null }
 
 // The finished story is a 1080×1920 image (9:16, like a phone screen)
 const W = 1080
@@ -110,7 +118,7 @@ async function renderStory(background: ImageBitmap, layers: Layer[]): Promise<Bl
 type Props = {
   file: File
   onCancel: () => void
-  onShare: (blob: Blob) => Promise<void>
+  onShare: (blob: Blob, sound: StorySound) => Promise<void>
 }
 
 export default function StoryEditor({ file, onCancel, onShare }: Props) {
@@ -123,6 +131,9 @@ export default function StoryEditor({ file, onCancel, onShare }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showStickers, setShowStickers] = useState(false)
+  const [music, setMusic] = useState<Track | null>(null)
+  const [voice, setVoice] = useState<Recording | null>(null)
+  const [panel, setPanel] = useState<'none' | 'music' | 'voice'>('none')
   const [sharing, setSharing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -258,7 +269,7 @@ export default function StoryEditor({ file, onCancel, onShare }: Props) {
 
     try {
       const visible = layers.filter((layer) => layer.type !== 'text' || layer.text.trim())
-      await onShare(await renderStory(background, visible))
+      await onShare(await renderStory(background, visible), { music, voice })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not share your story')
       setSharing(false)
@@ -368,7 +379,79 @@ export default function StoryEditor({ file, onCancel, onShare }: Props) {
             🖼️
             <input type="file" accept="image/*" multiple onChange={addImages} className="sr-only" />
           </label>
+          <button
+            onClick={() => setPanel('music')}
+            aria-label="Add music"
+            className={`${roundButton} ${music ? 'ring-2 ring-white' : ''}`}
+          >
+            🎵
+          </button>
+          <button
+            onClick={() => setPanel(panel === 'voice' ? 'none' : 'voice')}
+            aria-label="Add your voice"
+            className={`${roundButton} ${voice ? 'ring-2 ring-white' : ''}`}
+          >
+            🎙️
+          </button>
         </div>
+
+        {/* Chosen sound */}
+        {(music || voice) && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute top-16 left-3 z-10 flex max-w-[75%] items-center gap-2 rounded-full bg-black/50 py-1.5 pr-2 pl-3"
+          >
+            {music ? (
+              <MusicCredit track={music} compact light />
+            ) : (
+              <span className="text-xs text-white/90">🎙️ Your voice · {Math.round((voice?.durationMs ?? 0) / 1000)}s</span>
+            )}
+            <button
+              onClick={() => {
+                setMusic(null)
+                setVoice(null)
+              }}
+              aria-label="Remove sound"
+              className="text-sm text-white/80"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        {/* Hear the song while editing */}
+        {music && <audio src={music.url} autoPlay loop />}
+
+        {/* Record your voice */}
+        {panel === 'voice' && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute inset-x-3 top-28 z-20 flex flex-col gap-3 rounded-2xl bg-card p-4 animate-fade-up"
+          >
+            <VoiceRecorder
+              onChange={(rec) => {
+                setVoice(rec)
+                if (rec) setMusic(null) // one sound per story
+              }}
+            />
+            <button
+              onClick={() => setPanel('none')}
+              className="rounded-full bg-brand py-2 text-sm font-medium text-white"
+            >
+              Done
+            </button>
+          </div>
+        )}
+
+        {panel === 'music' && (
+          <MusicPicker
+            onSelect={(track) => {
+              setMusic(track)
+              setVoice(null)
+              setPanel('none')
+            }}
+            onClose={() => setPanel('none')}
+          />
+        )}
 
         {/* Sticker picker */}
         {showStickers && (

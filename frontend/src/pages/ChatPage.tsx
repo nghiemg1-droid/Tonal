@@ -632,7 +632,13 @@ export default function ChatPage({ userId }: { userId: string }) {
         </Link>
         <GroupAvatar people={others} small />
         <div className="min-w-0 flex-1">
-          <p className="truncate font-bold text-ink">{title}</p>
+          {info && !info.is_group && others[0] ? (
+            <Link to={`/u/${others[0].username}`} className="block truncate font-bold text-ink hover:underline">
+              {title}
+            </Link>
+          ) : (
+            <p className="truncate font-bold text-ink">{title}</p>
+          )}
           {info?.is_group && <p className="text-xs text-muted">{info.members.length} members</p>}
           {info && !info.is_group && others[0] && (
             <p className="truncate text-xs text-muted">@{others[0].username}</p>

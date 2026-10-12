@@ -7,17 +7,10 @@ import type { Post } from '../components/PostCard'
 import StoryBar from '../components/StoryBar'
 import StoryViewer from '../components/StoryViewer'
 import type { StoryGroup } from '../components/StoryViewer'
+import { addLikeInfo, POST_FIELDS } from '../lib/posts'
+import type { PostRow } from '../lib/posts'
 
 const PAGE_SIZE = 10
-const POST_FIELDS =
-  'id, kind, media_path, audio_path, duration_ms, caption_kind, caption_text, caption_path, caption_duration_ms, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count), comments(count)'
-
-// What the database sends back, before we add "did I like it?"
-type PostRow = Omit<Post, 'like_count' | 'liked_by_me' | 'comment_count'> & {
-  likes: { count: number }[]
-  comments: { count: number }[]
-}
-
 // Newest posts from these authors; "before" loads the next (older) page
 function fetchPosts(authorIds: string[], before?: string) {
   let query = supabase
@@ -28,25 +21,6 @@ function fetchPosts(authorIds: string[], before?: string) {
     .limit(PAGE_SIZE)
   if (before) query = query.lt('created_at', before)
   return query
-}
-
-// Add the like count, comment count, and whether I liked each post
-async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post[]> {
-  if (rows.length === 0) return []
-
-  const { data } = await supabase
-    .from('likes')
-    .select('post_id')
-    .eq('user_id', userId)
-    .in('post_id', rows.map((row) => row.id))
-  const likedByMe = new Set((data ?? []).map((row) => row.post_id))
-
-  return rows.map(({ likes, comments, ...post }) => ({
-    ...post,
-    like_count: likes[0]?.count ?? 0,
-    comment_count: comments[0]?.count ?? 0,
-    liked_by_me: likedByMe.has(post.id),
-  }))
 }
 
 export default function HomePage({ userId }: { userId: string }) {

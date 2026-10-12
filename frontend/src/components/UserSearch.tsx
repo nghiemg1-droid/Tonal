@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { cleanUsernameQuery } from '../lib/search'
 import { startChat } from '../lib/chat'
@@ -140,11 +140,13 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
           const isFollowing = following.has(person.id)
           return (
             <li key={person.id} className="flex items-center gap-3">
-              <Avatar name={name} url={person.avatar_url} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-ink">{name}</p>
-                <p className="truncate text-sm text-muted">@{person.username}</p>
-              </div>
+              <Link to={`/u/${person.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <Avatar name={name} url={person.avatar_url} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-ink hover:underline">{name}</p>
+                  <p className="truncate text-sm text-muted">@{person.username}</p>
+                </div>
+              </Link>
               <button
                 onClick={() => openChat(person.id)}
                 aria-label={`Message ${name}`}

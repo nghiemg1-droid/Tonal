@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
+import { columnsToTrack } from '../lib/music'
+import type { MusicColumns } from '../lib/music'
+import MusicCredit from './MusicCredit'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
@@ -11,7 +15,7 @@ import { blockUser } from '../lib/safety'
 import { StoryRing } from './StoryBar'
 import type { StoryGroup } from './StoryViewer'
 
-export type Post = {
+export type Post = Partial<MusicColumns> & {
   id: string
   kind: 'voice' | 'image'
   media_path: string
@@ -60,19 +64,29 @@ type Props = {
   storyGroup?: StoryGroup
   onOpenStory: (group: StoryGroup) => void
   onBlocked?: (authorId: string) => void
+  initialShowComments?: boolean
 }
 
-export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenStory, onBlocked }: Props) {
+export default function PostCard({
+  post,
+  userId,
+  onDeleted,
+  storyGroup,
+  onOpenStory,
+  onBlocked,
+  initialShowComments = false,
+}: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showComments, setShowComments] = useState(false)
+  const [showComments, setShowComments] = useState(initialShowComments)
   const [commentCount, setCommentCount] = useState(post.comment_count)
   const [reporting, setReporting] = useState(false)
 
   const isMine = post.author.id === userId
   const mediaUrl = fileUrl(post.media_path)
   const name = post.author.display_name || post.author.username
+  const music = columnsToTrack(post)
 
   async function handleDelete() {
     if (!window.confirm('Delete this post?')) return
@@ -127,8 +141,13 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
         )}
 
         <p className="min-w-0 flex-1 truncate text-sm">
-          <span className="font-semibold text-ink">{post.author.username}</span>
-          <span className="text-muted"> • {timeAgo(post.created_at)}</span>
+          <Link to={`/u/${post.author.username}`} className="font-semibold text-ink hover:underline">
+            {post.author.username}
+          </Link>
+          <Link to={`/p/${post.id}`} className="text-muted hover:underline">
+            {' '}• {timeAgo(post.created_at)}
+          </Link>
+          {music && <MusicCredit track={music} compact />}
         </p>
 
         <div className="relative">
@@ -185,8 +204,12 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
 
       {post.kind === 'voice' ? (
         <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />
-      ) : post.audio_path ? (
-        <ImageWithSound imageUrl={mediaUrl} audioUrl={fileUrl(post.audio_path)} alt={`Photo by ${name}`} />
+      ) : post.audio_path || music ? (
+        <ImageWithSound
+          imageUrl={mediaUrl}
+          audioUrl={post.audio_path ? fileUrl(post.audio_path) : (music?.url ?? '')}
+          alt={`Photo by ${name}`}
+        />
       ) : (
         <img
           src={mediaUrl}
@@ -219,7 +242,10 @@ export default function PostCard({ post, userId, onDeleted, storyGroup, onOpenSt
       {/* Caption */}
       {post.caption_kind === 'text' && post.caption_text && (
         <p className="mt-1 whitespace-pre-wrap wrap-break-word text-sm text-ink">
-          <span className="font-semibold">{post.author.username}</span> {post.caption_text}
+          <Link to={`/u/${post.author.username}`} className="font-semibold hover:underline">
+            {post.author.username}
+          </Link>{' '}
+          {post.caption_text}
         </p>
       )}
       {post.caption_kind === 'drawing' && post.caption_path && (

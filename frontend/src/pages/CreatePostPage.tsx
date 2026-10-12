@@ -6,6 +6,10 @@ import { encodeCanvas, makePostImage } from '../lib/image'
 import VoiceRecorder from '../components/VoiceRecorder'
 import type { Recording } from '../components/VoiceRecorder'
 import DrawingPad from '../components/DrawingPad'
+import MusicPicker from '../components/MusicPicker'
+import MusicCredit from '../components/MusicCredit'
+import { trackToColumns } from '../lib/music'
+import type { Track } from '../lib/music'
 
 type Mode = 'voice' | 'image'
 type CaptionMode = 'none' | 'text' | 'drawing' | 'voice'
@@ -34,6 +38,9 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [imageAudio, setImageAudio] = useState<Recording | null>(null)
+  const [soundMode, setSoundMode] = useState<'none' | 'music' | 'voice'>('none')
+  const [music, setMusic] = useState<Track | null>(null)
+  const [pickingMusic, setPickingMusic] = useState(false)
 
   // Caption (image posts only)
   const [captionMode, setCaptionMode] = useState<CaptionMode>('none')
@@ -105,7 +112,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         mediaPath = await upload(photo, photo.type, photo.type === 'image/webp' ? 'webp' : 'jpg')
 
         // 2. Optional background sound
-        if (imageAudio) {
+        if (soundMode === 'voice' && imageAudio) {
           const type = baseType(imageAudio.blob, 'audio/webm')
           audioPath = await upload(imageAudio.blob, type, audioExtension(type))
           durationMs = imageAudio.durationMs
@@ -143,6 +150,7 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         caption_text: captionText,
         caption_path: captionPath,
         caption_duration_ms: captionDurationMs,
+        ...trackToColumns(mode === 'image' && soundMode === 'music' ? music : null),
       })
       if (insertError) throw new Error(insertError.message)
 
@@ -193,14 +201,62 @@ export default function CreatePostPage({ userId }: { userId: string }) {
               <input type="file" accept="image/*" onChange={handleImageChange} className="sr-only" />
             </label>
 
-            {/* Background sound */}
-            <div className="mt-2 w-full border-t border-line pt-4">
-              <p className="mb-3 text-center text-sm text-muted">
-                Background sound: your voice or a song you made{' '}
-                <span className="opacity-70">(optional)</span>
+            {/* Background sound: music from the library, or your own recording */}
+            <div className="mt-2 flex w-full flex-col gap-3 border-t border-line pt-4">
+              <p className="text-center text-sm text-muted">
+                Sound <span className="opacity-70">(optional, plays while the photo is on screen)</span>
               </p>
-              <VoiceRecorder onChange={setImageAudio} />
+              <div className="flex gap-1 rounded-full bg-page p-1 text-sm">
+                <button type="button" onClick={() => setSoundMode('none')} className={tabClass(soundMode === 'none')}>
+                  None
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSoundMode('music')
+                    if (!music) setPickingMusic(true)
+                  }}
+                  className={tabClass(soundMode === 'music')}
+                >
+                  🎵 Music
+                </button>
+                <button type="button" onClick={() => setSoundMode('voice')} className={tabClass(soundMode === 'voice')}>
+                  🎙️ Record
+                </button>
+              </div>
+
+              {soundMode === 'music' && music && (
+                <div className="flex items-center gap-3 rounded-xl bg-page px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <MusicCredit track={music} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPickingMusic(true)}
+                    className="text-sm font-medium text-brand"
+                  >
+                    Change
+                  </button>
+                </div>
+              )}
+              <div className={soundMode === 'voice' ? '' : 'hidden'}>
+                <VoiceRecorder onChange={setImageAudio} />
+              </div>
             </div>
+
+            {pickingMusic && (
+              <MusicPicker
+                onSelect={(track) => {
+                  setMusic(track)
+                  setSoundMode('music')
+                  setPickingMusic(false)
+                }}
+                onClose={() => {
+                  setPickingMusic(false)
+                  if (!music) setSoundMode('none')
+                }}
+              />
+            )}
 
             {/* Caption */}
             <div className="mt-2 flex w-full flex-col gap-3 border-t border-line pt-4">

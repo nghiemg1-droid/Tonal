@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { encodeCanvas, makePostImage } from '../lib/image'
@@ -218,7 +219,9 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
                 <Avatar name={name} url={comment.author.avatar_url} className="h-8 w-8 text-sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">
-                    <span className="font-semibold text-ink">{comment.author.username}</span>
+                    <Link to={`/u/${comment.author.username}`} className="font-semibold text-ink hover:underline">
+                      {comment.author.username}
+                    </Link>
                     <span className="text-muted"> • {timeAgo(comment.created_at)}</span>
                   </p>
                   <div className="mt-1">

@@ -95,15 +95,17 @@ export default function SuggestionsSidebar({ userId }: { userId: string }) {
         <ul className="flex flex-col gap-3">
           {people.map((person) => (
             <li key={person.id} className="flex items-center gap-3">
-              <Avatar
-                name={person.display_name || person.username}
-                url={person.avatar_url}
-                className="h-9 w-9 text-sm"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">{person.username}</p>
-                <p className="truncate text-xs text-muted">New to Tonal</p>
-              </div>
+              <Link to={`/u/${person.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <Avatar
+                  name={person.display_name || person.username}
+                  url={person.avatar_url}
+                  className="h-9 w-9 text-sm"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink hover:underline">{person.username}</p>
+                  <p className="truncate text-xs text-muted">New to Tonal</p>
+                </div>
+              </Link>
               <button
                 onClick={() => toggleFollow(person.id)}
                 className={`text-xs font-semibold transition ${

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from '../components/Avatar'
@@ -94,15 +95,21 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
               key={item.id}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${isNew ? 'bg-brand/10' : ''}`}
             >
-              <Avatar name={name} url={item.actor.avatar_url} className="h-11 w-11 text-lg" />
+              <Link to={`/u/${item.actor.username}`}>
+                <Avatar name={name} url={item.actor.avatar_url} className="h-11 w-11 text-lg" />
+              </Link>
 
               <p className="min-w-0 flex-1 text-sm text-ink">
-                <span className="font-semibold">{item.actor.username}</span> {MESSAGES[item.type]}{' '}
+                <Link to={`/u/${item.actor.username}`} className="font-semibold hover:underline">
+                  {item.actor.username}
+                </Link>{' '}
+                {MESSAGES[item.type]}{' '}
                 <span className="text-muted">{timeAgo(item.created_at)}</span>
               </p>
 
-              {item.post &&
-                (item.post.kind === 'image' ? (
+              {item.post && (
+                <Link to={`/p/${item.post.id}`} className="shrink-0">
+                {item.post.kind === 'image' ? (
                   <img
                     src={supabase.storage.from('posts').getPublicUrl(item.post.media_path).data.publicUrl}
                     alt=""
@@ -112,7 +119,9 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-page text-xl">
                     🎙️
                   </span>
-                ))}
+                )}
+                </Link>
+              )}
             </div>
           )
         })

@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
+import MusicCredit from './MusicCredit'
+import { columnsToTrack } from '../lib/music'
+import type { MusicColumns } from '../lib/music'
+import { playExclusive } from '../lib/playback'
 
 export type Person = {
   id: string
@@ -10,11 +14,13 @@ export type Person = {
   avatar_url: string | null
 }
 
-export type Story = {
+export type Story = Partial<MusicColumns> & {
   id: string
   media_path: string
   created_at: string
   seen: boolean
+  audio_path?: string | null
+  audio_duration_ms?: number | null
 }
 
 export type StoryGroup = {
@@ -22,7 +28,18 @@ export type StoryGroup = {
   stories: Story[]
 }
 
-const DURATION = 5000 // each photo shows for 5 seconds
+const DURATION = 5000 // a photo story shows for 5 seconds
+const MUSIC_DURATION = 15000 // a story with a song plays 15 seconds of it
+
+function storyDuration(story: Story) {
+  if (story.audio_path && story.audio_duration_ms) return story.audio_duration_ms
+  if (story.music_url) return MUSIC_DURATION
+  return DURATION
+}
+
+function storyFileUrl(path: string) {
+  return supabase.storage.from('stories').getPublicUrl(path).data.publicUrl
+}
 
 type Props = {
   group: StoryGroup
@@ -49,6 +66,10 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
 
   const story = group.stories[index]
   const name = group.person.display_name || group.person.username
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [muted, setMuted] = useState(false)
+  const music = story ? columnsToTrack(story) : null
+  const soundUrl = story?.audio_path ? storyFileUrl(story.audio_path) : (music?.url ?? null)
 
   function goTo(next: number) {
     elapsedRef.current = 0
@@ -70,7 +91,7 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
     function tick(now: number) {
       elapsedRef.current += now - last
       last = now
-      const p = elapsedRef.current / DURATION
+      const p = elapsedRef.current / storyDuration(group.stories[index])
       if (p >= 1) {
         goTo(index + 1)
         return
@@ -114,6 +135,26 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
     }
   }, [storyId, isMine])
 
+  // Sound: start from the beginning on each story, follow pause/hold and mute
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !soundUrl) return
+    audio.currentTime = 0
+  }, [soundUrl, index])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !soundUrl) return
+    audio.muted = muted
+    if (paused) audio.pause()
+    else playExclusive(audio).catch(() => setMuted(true))
+  }, [soundUrl, paused, muted, index])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    return () => audio?.pause()
+  }, [])
+
   // Keyboard: Esc closes, arrows move
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -148,7 +189,9 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
       setPaused(false)
       return
     }
-    await supabase.storage.from('stories').remove([story.media_path])
+    await supabase.storage
+      .from('stories')
+      .remove([story.media_path, ...(story.audio_path ? [story.audio_path] : [])])
     onDeleted()
   }
 
@@ -163,7 +206,7 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
     >
       <div className="relative h-full w-full overflow-hidden bg-black sm:aspect-[9/16] sm:h-[85vh] sm:w-auto sm:rounded-2xl">
         <img
-          src={supabase.storage.from('stories').getPublicUrl(story.media_path).data.publicUrl}
+          src={storyFileUrl(story.media_path)}
           alt={`Story by ${name}`}
           className="h-full w-full object-contain"
         />
@@ -186,6 +229,15 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
           <span className="text-sm font-semibold">{group.person.username}</span>
           <span className="text-sm text-white/70">{timeAgo(story.created_at)}</span>
           <div className="flex-1" />
+          {soundUrl && (
+            <button
+              onClick={() => setMuted((m) => !m)}
+              aria-label={muted ? 'Turn sound on' : 'Mute'}
+              className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10 transition"
+            >
+              {muted ? '🔇' : '🔊'}
+            </button>
+          )}
           {isMine && (
             <button
               onClick={handleDelete}
@@ -202,6 +254,18 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen 
             ✕
           </button>
         </div>
+
+        {/* Song credit (or voice) under the header */}
+        {(music || story.audio_path) && (
+          <div className="absolute top-16 left-4 z-10 flex max-w-[70%] items-center rounded-full bg-black/40 px-3 py-1">
+            {music ? (
+              <MusicCredit track={music} compact light />
+            ) : (
+              <span className="text-xs text-white/90">🎙️ Voice</span>
+            )}
+          </div>
+        )}
+        {soundUrl && <audio ref={audioRef} src={soundUrl} loop={!story.audio_path} preload="auto" />}
 
         {/* Tap areas: left half = back, right half = next */}
         <button

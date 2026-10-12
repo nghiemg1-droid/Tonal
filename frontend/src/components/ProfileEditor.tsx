@@ -3,12 +3,14 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { makeAvatar } from '../lib/image'
 import Avatar from './Avatar'
+import FollowList from './FollowList'
 
 type Profile = {
   id: string
   username: string
   display_name: string | null
   avatar_url: string | null
+  bio: string | null
 }
 
 type Props = {
@@ -17,11 +19,13 @@ type Props = {
 }
 
 const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
-const PROFILE_FIELDS = 'id, username, display_name, avatar_url'
+const PROFILE_FIELDS = 'id, username, display_name, avatar_url, bio'
 
 export default function ProfileEditor({ userId, refreshKey }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [counts, setCounts] = useState({ followers: 0, following: 0 })
+  const [counts, setCounts] = useState({ posts: 0, followers: 0, following: 0 })
+  const [list, setList] = useState<'followers' | 'following' | null>(null)
+  const [bio, setBio] = useState('')
   const [editing, setEditing] = useState(false)
   const [username, setUsername] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -45,6 +49,7 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
   // Load follower / following counts
   useEffect(() => {
     Promise.all([
+      supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', userId),
       supabase
         .from('follows')
         .select('*', { count: 'exact', head: true })
@@ -53,8 +58,8 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
         .from('follows')
         .select('*', { count: 'exact', head: true })
         .eq('follower_id', userId),
-    ]).then(([followers, following]) => {
-      setCounts({ followers: followers.count ?? 0, following: following.count ?? 0 })
+    ]).then(([posts, followers, following]) => {
+      setCounts({ posts: posts.count ?? 0, followers: followers.count ?? 0, following: following.count ?? 0 })
     })
   }, [userId, refreshKey])
 
@@ -62,6 +67,7 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
     if (!profile) return
     setUsername(profile.username)
     setDisplayName(profile.display_name ?? '')
+    setBio(profile.bio ?? '')
     setError(null)
     setEditing(true)
   }
@@ -80,7 +86,11 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .update({ username: cleanUsername, display_name: displayName.trim() || null })
+      .update({
+        username: cleanUsername,
+        display_name: displayName.trim() || null,
+        bio: bio.trim() || null,
+      })
       .eq('id', userId)
       .select(PROFILE_FIELDS)
       .single()
@@ -183,6 +193,19 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
             />
           </label>
 
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            Bio
+            <textarea
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              maxLength={150}
+              rows={3}
+              placeholder="A few words about you"
+              className={`${inputClass} resize-none`}
+            />
+            <span className="self-end text-xs">{bio.length}/150</span>
+          </label>
+
           {error && <p className="text-sm text-red-500">{error}</p>}
 
           <div className="flex gap-2">
@@ -229,8 +252,14 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
               <p className="truncate font-semibold text-ink">{name}</p>
               <p className="truncate text-sm text-muted">@{profile.username}</p>
               <p className="mt-1 text-sm text-muted">
-                <span className="font-semibold text-ink">{counts.followers}</span> followers ·{' '}
-                <span className="font-semibold text-ink">{counts.following}</span> following
+                <span className="font-semibold text-ink">{counts.posts}</span> posts ·{' '}
+                <button onClick={() => setList('followers')} className="hover:underline">
+                  <span className="font-semibold text-ink">{counts.followers}</span> followers
+                </button>{' '}
+                ·{' '}
+                <button onClick={() => setList('following')} className="hover:underline">
+                  <span className="font-semibold text-ink">{counts.following}</span> following
+                </button>
               </p>
             </div>
 
@@ -242,7 +271,9 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
             </button>
           </div>
 
+          {profile.bio && <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{profile.bio}</p>}
           {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+          {list && <FollowList userId={userId} kind={list} onClose={() => setList(null)} />}
         </>
       )}
     </div>

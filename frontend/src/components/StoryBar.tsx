@@ -3,6 +3,9 @@ import type { ChangeEvent, ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import Avatar from './Avatar'
 import StoryEditor from './StoryEditor'
+import type { StorySound } from './StoryEditor'
+import { trackToColumns } from '../lib/music'
+import { audioExtension } from '../lib/messages'
 import type { Person, StoryGroup } from './StoryViewer'
 import { allSeen } from '../hooks/useStories'
 
@@ -48,19 +51,40 @@ export default function StoryBar({ userId, me, groups, onChanged, onOpen }: Prop
   }
 
   // The editor gives back the finished 1080×1920 image
-  async function shareStory(blob: Blob) {
+  async function shareStory(blob: Blob, sound: StorySound) {
     const path = `${userId}/${crypto.randomUUID()}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`
+    const uploaded: string[] = []
 
     const { error: uploadError } = await supabase.storage
       .from('stories')
       .upload(path, blob, { contentType: blob.type })
     if (uploadError) throw new Error(uploadError.message)
+    uploaded.push(path)
 
-    const { error: insertError } = await supabase
-      .from('stories')
-      .insert({ author_id: userId, media_path: path })
+    // Optional voice recording
+    let audioPath: string | null = null
+    if (sound.voice) {
+      const type = sound.voice.blob.type.split(';')[0] || 'audio/webm'
+      audioPath = `${userId}/${crypto.randomUUID()}.${audioExtension(type)}`
+      const { error } = await supabase.storage
+        .from('stories')
+        .upload(audioPath, sound.voice.blob, { contentType: type })
+      if (error) {
+        await supabase.storage.from('stories').remove(uploaded)
+        throw new Error(error.message)
+      }
+      uploaded.push(audioPath)
+    }
+
+    const { error: insertError } = await supabase.from('stories').insert({
+      author_id: userId,
+      media_path: path,
+      audio_path: audioPath,
+      audio_duration_ms: sound.voice?.durationMs ?? null,
+      ...trackToColumns(sound.voice ? null : sound.music),
+    })
     if (insertError) {
-      await supabase.storage.from('stories').remove([path])
+      await supabase.storage.from('stories').remove(uploaded)
       throw new Error(insertError.message)
     }
 
