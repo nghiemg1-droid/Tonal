@@ -2,20 +2,22 @@
 
 [![CI](https://github.com/nghiemg1-droid/Tonal/actions/workflows/ci.yml/badge.svg)](https://github.com/nghiemg1-droid/Tonal/actions/workflows/ci.yml)
 
-A social app built around **voice, photos and drawings**. Share a 60-second voice clip, a photo that plays a sound while it's on screen, or a hand-drawn caption — and talk to friends in real-time chats with voice messages, stickers and view-once photos.
+A social app built around **voice, photos, short videos and drawings**. Share a 60-second voice clip, a photo with music that plays while it's on screen, or a short video — and talk to friends in real-time chats with voice messages, stickers and view-once photos.
 
 **Live app: [tonal-six.vercel.app](https://tonal-six.vercel.app)** — installable on phones as a web app (PWA).
 
 ## Features
 
-**Posts and feed**
-- Voice posts (up to 60 s) and photo posts, with an optional background sound that plays while the photo is on screen
+**Posts, clips and feed**
+- Voice posts (up to 60 s), photo posts and **short videos** (up to 60 s) with a full-screen vertical Clips feed
+- Photos can play a song from an open-license music library (with credits) or your own recording while on screen
+- Profile pages with bio, followers/following lists and a post grid; Explore grid and a page for every post
 - Captions as text, a drawing or a voice note
 - Likes with an animated heart, and comments as text, voice, photo or drawing
 - Notifications for likes, comments and new followers, updated in real time
 
 **Stories**
-- 24-hour stories with an editor for text, stickers and multiple photos
+- 24-hour stories with an editor for text, stickers, multiple photos, music or your own voice
 - Red ring for new stories, gray ring once you've seen them all
 - "Seen by" list on your own stories
 
@@ -99,8 +101,7 @@ CI runs all of these, plus a production build, on every push.
 
 ## Roadmap
 
-- Music library for stories and photo posts
-- Voice stories and short videos
+- Hashtags, mentions and saved posts
 - Voice and video calls
 - Native mobile app
 
