@@ -50,14 +50,14 @@ export default function EmailCodeStep({ email, onBack }: Props) {
     <form onSubmit={verify} className="flex flex-col gap-3">
       <h2 className="text-2xl font-bold text-ink">Check your email</h2>
       <p className="-mt-1 text-sm text-muted">
-        We sent a 6-digit code to <b className="text-ink">{email}</b>. Check spam too.
+        We sent a code to <b className="text-ink">{email}</b>. Check spam too.
       </p>
       <input
         inputMode="numeric"
         autoComplete="one-time-code"
-        placeholder="123456"
+        placeholder="Code"
         value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
         required
         autoFocus
         className={`${inputClass} text-center text-2xl tracking-[0.5em]`}

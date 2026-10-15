@@ -109,9 +109,9 @@ export default function PhoneLogin() {
       <input
         inputMode="numeric"
         autoComplete="one-time-code"
-        placeholder="123456"
+        placeholder="Code"
         value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+        onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
         required
         className={`${inputClass} text-center text-2xl tracking-[0.5em]`}
       />
