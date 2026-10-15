@@ -38,6 +38,11 @@ export default function AuthForm() {
     const { data, error } = await supabase.auth.signUp({ email: clean, password })
     setLoading(false)
     if (error) {
+      // A code was already emailed a moment ago: just ask for it
+      if (/security purposes|after \d+ seconds/i.test(error.message)) {
+        setCodeFor(clean)
+        return
+      }
       setError(/rate limit/i.test(error.message) ? 'Too many sign-ups right now. Please try again in a while.' : error.message)
       return
     }
