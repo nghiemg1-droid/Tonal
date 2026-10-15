@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { logAuth } from '../lib/authLog'
 import { supabase } from '../lib/supabase'
 import ProfileEditor from '../components/ProfileEditor'
 import BlockedAccounts from '../components/BlockedAccounts'
@@ -36,7 +37,10 @@ export default function ProfilePage({ userId }: { userId: string }) {
       </section>
 
       <button
-        onClick={() => supabase.auth.signOut()}
+        onClick={() => {
+          logAuth('pressed Log out')
+          supabase.auth.signOut()
+        }}
         className="rounded-full border border-line px-5 py-2 text-ink hover:bg-card active:scale-95 transition"
       >
         Log out

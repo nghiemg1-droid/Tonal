@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router'
 import type { Session } from '@supabase/supabase-js'
+import { displayMode, logAuth } from './lib/authLog'
+import LoginTroubleshooting from './components/LoginTroubleshooting'
 import { supabase } from './lib/supabase'
 import { useUnreadCount } from './hooks/useUnreadCount'
 import { useUnreadChats } from './hooks/useUnreadChats'
@@ -118,13 +120,15 @@ function App() {
 
   useEffect(() => {
     // Check if the user is already logged in
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data, error }) => {
+      logAuth(`open (${displayMode()}): ${data.session ? 'logged in' : 'logged out'}${error ? ` · ${error.message}` : ''}`)
       setSession(data.session)
       setLoading(false)
     })
 
     // Update automatically when the user logs in or out
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event !== 'INITIAL_SESSION') logAuth(`event ${event}`)
       setSession(newSession)
     })
 
@@ -162,6 +166,7 @@ function App() {
           Welcome to <span className="text-brand">Tonal</span>
         </h1>
         <AuthForm />
+        <LoginTroubleshooting />
       </main>
     )
   }
