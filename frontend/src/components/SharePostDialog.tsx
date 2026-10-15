@@ -22,6 +22,28 @@ export default function SharePostDialog({ userId, postId, onClose }: Props) {
   const [note, setNote] = useState('')
   const [sentTo, setSentTo] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const link = `${window.location.origin}/p/${postId}`
+  const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Could not copy. Link: ' + link)
+    }
+  }
+
+  async function shareOutside() {
+    try {
+      await navigator.share({ title: 'Tonal', text: 'Check this out on Tonal', url: link })
+    } catch {
+      // closed the share sheet: nothing to do
+    }
+  }
 
   // Recent chats
   useEffect(() => {
@@ -112,6 +134,24 @@ export default function SharePostDialog({ userId, postId, onClose }: Props) {
           <button onClick={onClose} aria-label="Close" className="text-2xl leading-none text-muted">
             ×
           </button>
+        </div>
+
+        {/* Share outside the app */}
+        <div className="flex gap-2">
+          <button
+            onClick={copyLink}
+            className="flex-1 rounded-full border border-line py-2 text-sm font-medium text-ink hover:bg-page active:scale-95 transition"
+          >
+            {copied ? 'Copied ✓' : '🔗 Copy link'}
+          </button>
+          {canNativeShare && (
+            <button
+              onClick={shareOutside}
+              className="flex-1 rounded-full border border-line py-2 text-sm font-medium text-ink hover:bg-page active:scale-95 transition"
+            >
+              ↗ More…
+            </button>
+          )}
         </div>
 
         <input

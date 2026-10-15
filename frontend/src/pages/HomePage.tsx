@@ -18,6 +18,7 @@ function fetchPosts(authorIds: string[], before?: string) {
     .from('posts')
     .select(POST_FIELDS)
     .in('author_id', authorIds)
+    .eq('show_in_feed', true) // clips shared only to Clips stay out of Home
     .order('created_at', { ascending: false })
     .limit(PAGE_SIZE)
   if (before) query = query.lt('created_at', before)

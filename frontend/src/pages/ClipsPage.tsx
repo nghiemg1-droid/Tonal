@@ -10,6 +10,10 @@ import VideoPlayer from '../components/VideoPlayer'
 import LikeButton from '../components/LikeButton'
 import CommentSection from '../components/CommentSection'
 import RichText from '../components/RichText'
+import SharePostDialog from '../components/SharePostDialog'
+import MusicCredit from '../components/MusicCredit'
+import { columnsToTrack } from '../lib/music'
+import { sanitizeEdit } from '../lib/videoEdit'
 
 const PAGE = 8
 
@@ -19,6 +23,7 @@ export default function ClipsPage({ userId }: { userId: string }) {
   const [hasMore, setHasMore] = useState(true)
   const [loading, setLoading] = useState(false)
   const [commentsFor, setCommentsFor] = useState<Post | null>(null)
+  const [sharing, setSharing] = useState<Post | null>(null)
   const [params] = useSearchParams()
   const startId = params.get('start') // opened from a clip on Home: show it first
 
@@ -81,6 +86,7 @@ export default function ClipsPage({ userId }: { userId: string }) {
 
       {clips.map((clip) => {
         const name = clip.author.display_name || clip.author.username
+        const music = columnsToTrack(clip)
         return (
           <section key={clip.id} className="relative mx-auto h-full w-full max-w-[470px] snap-start snap-always">
             <VideoPlayer
@@ -88,6 +94,8 @@ export default function ClipsPage({ userId }: { userId: string }) {
               poster={clip.poster_path ? postFileUrl(clip.poster_path) : ''}
               fill
               className="h-full w-full"
+              edit={sanitizeEdit(clip.video_edit)}
+              music={music}
             />
 
             {/* Who posted it + caption */}
@@ -100,6 +108,11 @@ export default function ClipsPage({ userId }: { userId: string }) {
                 <p className="pointer-events-auto mt-2 line-clamp-3 text-sm">
                   <RichText text={clip.caption_text} />
                 </p>
+              )}
+              {music && (
+                <div className="pointer-events-auto mt-2 max-w-full">
+                  <MusicCredit track={music} compact light />
+                </div>
               )}
             </div>
 
@@ -119,10 +132,23 @@ export default function ClipsPage({ userId }: { userId: string }) {
                 <span className="text-2xl">💬</span>
                 {clip.comment_count}
               </button>
+              <button
+                onClick={() => setSharing(clip)}
+                aria-label="Share"
+                className="flex flex-col items-center px-3 text-sm"
+              >
+                <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+                Share
+              </button>
             </div>
           </section>
         )
       })}
+
+      {sharing && <SharePostDialog userId={userId} postId={sharing.id} onClose={() => setSharing(null)} />}
 
       {/* Comments sheet */}
       {commentsFor && (

@@ -4,6 +4,7 @@ import { columnsToTrack } from '../lib/music'
 import type { MusicColumns } from '../lib/music'
 import MusicCredit from './MusicCredit'
 import VideoPlayer from './VideoPlayer'
+import { sanitizeEdit } from '../lib/videoEdit'
 import RichText from './RichText'
 import SharePostDialog from './SharePostDialog'
 import { supabase } from '../lib/supabase'
@@ -22,6 +23,8 @@ export type Post = Partial<MusicColumns> & {
   id: string
   kind: 'voice' | 'image' | 'video'
   poster_path?: string | null
+  video_edit?: unknown // settings from the clip editor (checked with sanitizeEdit)
+  show_in_feed?: boolean
   media_path: string
   audio_path: string | null
   duration_ms: number | null
@@ -268,6 +271,8 @@ export default function PostCard({
               src={mediaUrl}
               poster={post.poster_path ? fileUrl(post.poster_path) : ''}
               className="md:rounded-md"
+              edit={sanitizeEdit(post.video_edit)}
+              music={music}
             />
           ) : post.audio_path || music ? (
             <ImageWithSound

@@ -22,7 +22,7 @@ export function useStories(userId: string) {
     const { data } = await supabase
       .from('stories')
       .select(
-        `id, media_path, created_at, audio_path, audio_duration_ms, music_url, music_title, music_artist, music_license, music_source_url, author:profiles!stories_author_id_fkey(${PERSON_FIELDS})`,
+        `id, media_path, created_at, audio_path, audio_duration_ms, music_url, music_title, music_artist, music_license, music_source_url, post:posts!stories_post_id_fkey(media_path, poster_path, duration_ms, video_edit, music_url, music_title, music_artist, music_license, music_source_url), author:profiles!stories_author_id_fkey(${PERSON_FIELDS})`,
       )
       .in('author_id', ids)
       .gt('expires_at', new Date().toISOString())
