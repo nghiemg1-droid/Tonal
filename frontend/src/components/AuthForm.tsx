@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
 import PhoneLogin from './PhoneLogin'
+import EmailCodeStep from './EmailCodeStep'
 
 export default function AuthForm() {
   const [method, setMethod] = useState<'email' | 'phone'>('email')
@@ -11,19 +12,37 @@ export default function AuthForm() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [codeFor, setCodeFor] = useState<string | null>(null) // email waiting for its code
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
 
-    const { error } =
-      mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password })
+    const clean = email.trim().toLowerCase()
 
-    if (error) setError(error.message)
+    if (mode === 'login') {
+      const { error } = await supabase.auth.signInWithPassword({ email: clean, password })
+      setLoading(false)
+      if (!error) return
+      // Signed up but never typed the code: ask for it now
+      if (/not confirmed/i.test(error.message)) {
+        await supabase.auth.resend({ type: 'signup', email: clean })
+        setCodeFor(clean)
+        return
+      }
+      setError(error.message)
+      return
+    }
+
+    const { data, error } = await supabase.auth.signUp({ email: clean, password })
     setLoading(false)
+    if (error) {
+      setError(/rate limit/i.test(error.message) ? 'Too many sign-ups right now. Please try again in a while.' : error.message)
+      return
+    }
+    // When email confirmation is on, there's no session yet: ask for the code
+    if (!data.session) setCodeFor(clean)
   }
 
   const tabClass = (active: boolean) =>
@@ -38,6 +57,14 @@ export default function AuthForm() {
       </button>
     </div>
   )
+
+  if (codeFor) {
+    return (
+      <div className="w-full max-w-sm flex flex-col gap-3 rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up">
+        <EmailCodeStep email={codeFor} onBack={() => setCodeFor(null)} />
+      </div>
+    )
+  }
 
   if (method === 'phone') {
     return (
