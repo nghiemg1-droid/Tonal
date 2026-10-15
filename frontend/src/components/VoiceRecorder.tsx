@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { startTranscript } from '../lib/speech'
 
 const MAX_MS = 60_000
 
 export type Recording = {
   blob: Blob
   durationMs: number
+  transcript?: string // words, if the browser could understand them
 }
 
 type Props = {
@@ -31,6 +33,7 @@ export default function VoiceRecorder({ onChange }: Props) {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const startRef = useRef(0)
   const timerRef = useRef<number | null>(null)
+  const stopTranscriptRef = useRef<(() => string) | null>(null)
 
   // Turn off the microphone if the user leaves the page mid-recording
   useEffect(() => {
@@ -73,17 +76,20 @@ export default function VoiceRecorder({ onChange }: Props) {
 
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop()) // microphone off
+      const transcript = stopTranscriptRef.current?.() ?? ''
+      stopTranscriptRef.current = null
       const durationMs = Math.min(Math.max(Date.now() - startRef.current, 1), MAX_MS)
       const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' })
       setAudioUrl(URL.createObjectURL(blob))
       setStatus('done')
-      onChange({ blob, durationMs })
+      onChange({ blob, durationMs, transcript: transcript || undefined })
     }
 
     recorderRef.current = recorder
     startRef.current = Date.now()
     setElapsed(0)
     recorder.start()
+    stopTranscriptRef.current = startTranscript()
     setStatus('recording')
 
     timerRef.current = window.setInterval(() => {

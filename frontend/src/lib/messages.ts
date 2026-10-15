@@ -14,6 +14,7 @@ export type Message = {
   view_once: boolean
   story_id?: string | null
   post_id?: string | null
+  transcript?: string | null
   created_at: string
 }
 

@@ -2,7 +2,7 @@ import { supabase } from './supabase'
 import type { Post } from '../components/PostCard'
 
 export const POST_FIELDS =
-  'id, kind, media_path, audio_path, duration_ms, poster_path, caption_kind, caption_text, caption_path, caption_duration_ms, music_url, music_title, music_artist, music_license, music_source_url, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), likes(count), comments(count)'
+  'id, kind, media_path, audio_path, duration_ms, poster_path, transcript, caption_kind, caption_text, caption_path, caption_duration_ms, music_url, music_title, music_artist, music_license, music_source_url, created_at, author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url, founding_member), likes(count), comments(count)'
 
 // What the database sends back, before we add "did I like it?"
 export type PostRow = Omit<Post, 'like_count' | 'liked_by_me' | 'comment_count'> & {

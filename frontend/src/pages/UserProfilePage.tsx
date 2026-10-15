@@ -15,6 +15,8 @@ type Profile = {
   display_name: string | null
   avatar_url: string | null
   bio: string | null
+  is_private: boolean
+  founding_member: boolean
 }
 
 type Counts = { posts: number; followers: number; following: number }
@@ -27,6 +29,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
   const [counts, setCounts] = useState<Counts>({ posts: 0, followers: 0, following: 0 })
   const [following, setFollowing] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  const [requested, setRequested] = useState(false)
   const [busy, setBusy] = useState(false)
   const [list, setList] = useState<'followers' | 'following' | null>(null)
   const [menu, setMenu] = useState(false)
@@ -42,7 +45,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     async function load() {
       const { data } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, bio')
+        .select('id, username, display_name, avatar_url, bio, is_private, founding_member')
         .eq('username', username.toLowerCase())
         .maybeSingle()
       if (cancelled) return
@@ -52,17 +55,19 @@ export default function UserProfilePage({ userId }: { userId: string }) {
       }
       setProfile(data)
 
-      const [posts, followers, followingCount, iFollow, iBlocked] = await Promise.all([
+      const [posts, followers, followingCount, iFollow, iBlocked, iRequested] = await Promise.all([
         supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', data.id),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', data.id),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', data.id),
         supabase.from('follows').select('follower_id').eq('follower_id', userId).eq('following_id', data.id).maybeSingle(),
         supabase.from('blocks').select('blocked_id').eq('blocker_id', userId).eq('blocked_id', data.id).maybeSingle(),
+        supabase.from('follow_requests').select('target_id').eq('requester_id', userId).eq('target_id', data.id).maybeSingle(),
       ])
       if (cancelled) return
       setCounts({ posts: posts.count ?? 0, followers: followers.count ?? 0, following: followingCount.count ?? 0 })
       setFollowing(!!iFollow.data)
       setBlocked(!!iBlocked.data)
+      setRequested(!!iRequested.data)
     }
     load()
     return () => {
@@ -93,6 +98,18 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     if (!profile) return
     setBusy(true)
     setError(null)
+
+    // Private account: send (or cancel) a follow request instead
+    if (profile.is_private && !following) {
+      const { error } = requested
+        ? await supabase.from('follow_requests').delete().eq('requester_id', userId).eq('target_id', profile.id)
+        : await supabase.from('follow_requests').insert({ target_id: profile.id })
+      setBusy(false)
+      if (error && error.code !== '23505') setError(error.message)
+      else setRequested(!requested)
+      return
+    }
+
     const { error } = following
       ? await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', profile.id)
       : await supabase.from('follows').insert({ follower_id: userId, following_id: profile.id })
@@ -155,7 +172,14 @@ export default function UserProfilePage({ userId }: { userId: string }) {
 
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="font-bold text-ink">{name}</h2>
+          <h2 className="font-bold text-ink">
+            {name}
+            {profile.founding_member && (
+              <span title="Founding member" className="ml-1 text-sm">
+                🏅
+              </span>
+            )}
+          </h2>
           <span className="text-sm text-muted">@{profile.username}</span>
           <div className="flex-1" />
           <div className="relative">
@@ -202,7 +226,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
               following ? 'bg-card text-ink border border-line' : 'bg-brand text-white hover:bg-brand-dark'
             }`}
           >
-            {following ? 'Following' : 'Follow'}
+            {following ? 'Following' : requested ? 'Requested' : 'Follow'}
           </button>
           <button
             onClick={message}
@@ -215,7 +239,15 @@ export default function UserProfilePage({ userId }: { userId: string }) {
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 
-      {!blocked && (
+      {!blocked && profile.is_private && !following && (
+        <div className="flex flex-col items-center gap-2 border-t border-line py-10 text-center">
+          <span className="text-4xl">🔒</span>
+          <p className="font-semibold text-ink">This account is private</p>
+          <p className="text-sm text-muted">Follow to see their posts and stories.</p>
+        </div>
+      )}
+
+      {!blocked && (!profile.is_private || following) && (
         <>
           {!loading && posts.length === 0 && (
             <p className="py-10 text-center text-sm text-muted">No posts yet.</p>

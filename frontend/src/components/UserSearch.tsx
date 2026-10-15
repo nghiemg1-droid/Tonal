@@ -90,7 +90,11 @@ export default function UserSearch({ userId, onFollowChange }: Props) {
 
     setBusyId(null)
     if (error) {
-      setError(error.message)
+      setError(
+        error.message.includes('row-level security')
+          ? "This account is private. Open their profile to send a follow request."
+          : error.message,
+      )
       return
     }
 

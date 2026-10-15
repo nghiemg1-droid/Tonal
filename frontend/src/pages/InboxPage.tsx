@@ -24,6 +24,7 @@ const FIELDS = `last_read_at, conversation:conversations(id, is_group, name, las
 export default function InboxPage({ userId }: { userId: string }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
+  const [streaks, setStreaks] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -35,7 +36,11 @@ export default function InboxPage({ userId }: { userId: string }) {
         .select(FIELDS)
         .eq('user_id', userId)
 
+      const { data: streakRows } = await supabase.rpc('my_dm_streaks')
       if (cancelled) return
+      setStreaks(
+        Object.fromEntries(((streakRows ?? []) as { conversation_id: string; streak: number }[]).map((r) => [r.conversation_id, r.streak])),
+      )
       if (error) {
         setError(error.message)
       } else {
@@ -113,6 +118,11 @@ export default function InboxPage({ userId }: { userId: string }) {
                 <div className="min-w-0 flex-1">
                   <p className={`truncate text-ink ${unread ? 'font-bold' : 'font-medium'}`}>
                     {title}
+                    {streaks[c.id] && (
+                      <span title={`${streaks[c.id]}-day streak`} className="ml-1.5 text-sm font-semibold text-orange-500">
+                        🔥{streaks[c.id]}
+                      </span>
+                    )}
                   </p>
                   <p className={`truncate text-sm ${unread ? 'font-semibold text-ink' : 'text-muted'}`}>
                     {preview}

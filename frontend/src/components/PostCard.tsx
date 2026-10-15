@@ -32,6 +32,7 @@ export type Post = Partial<MusicColumns> & {
   created_at: string
   like_count: number
   liked_by_me: boolean
+  transcript?: string | null
   saved_by_me?: boolean
   comment_count: number
   author: {
@@ -39,6 +40,7 @@ export type Post = Partial<MusicColumns> & {
     username: string
     display_name: string | null
     avatar_url: string | null
+    founding_member?: boolean
   }
 }
 
@@ -87,6 +89,7 @@ export default function PostCard({
   const [showComments, setShowComments] = useState(initialShowComments)
   const [commentCount, setCommentCount] = useState(post.comment_count)
   const [reporting, setReporting] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
   const [saved, setSaved] = useState(!!post.saved_by_me)
   const [sharing, setSharing] = useState(false)
   const [caption, setCaption] = useState(post.caption_kind === 'text' ? (post.caption_text ?? '') : '')
@@ -156,7 +159,7 @@ export default function PostCard({
   const menuItem = 'block w-full px-4 py-2.5 text-left text-sm hover:bg-page disabled:opacity-50'
 
   return (
-    <article className="w-full border-b border-line pb-5 animate-fade-up">
+    <article className="w-full pb-6 animate-fade-up">
       <header className="mb-3 flex items-center gap-3">
         {storyGroup ? (
           <button
@@ -178,6 +181,11 @@ export default function PostCard({
           <Link to={`/u/${post.author.username}`} className="font-semibold text-ink hover:underline">
             {post.author.username}
           </Link>
+          {post.author.founding_member && (
+            <span title="Founding member" className="ml-1 text-xs">
+              🏅
+            </span>
+          )}
           <Link to={`/p/${post.id}`} className="text-muted hover:underline">
             {' '}• {timeAgo(post.created_at)}
           </Link>
@@ -250,27 +258,52 @@ export default function PostCard({
         />
       )}
 
-      {post.kind === 'video' ? (
-        <VideoPlayer
-          src={mediaUrl}
-          poster={post.poster_path ? fileUrl(post.poster_path) : ''}
-          className="rounded-md border border-line"
-        />
-      ) : post.kind === 'voice' ? (
-        <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} />
-      ) : post.audio_path || music ? (
-        <ImageWithSound
-          imageUrl={mediaUrl}
-          audioUrl={post.audio_path ? fileUrl(post.audio_path) : (music?.url ?? '')}
-          alt={`Photo by ${name}`}
-        />
+      {/* Photos and videos go edge to edge on phones (like other social apps) */}
+      {post.kind === 'voice' ? (
+        <VoicePlayer src={mediaUrl} durationMs={post.duration_ms ?? 0} transcript={post.transcript} />
       ) : (
-        <img
-          src={mediaUrl}
-          alt={`Photo by ${name}`}
-          loading="lazy"
-          className="max-h-144 w-full rounded-md border border-line bg-card object-cover"
-        />
+        <div className="-mx-4 md:mx-0">
+          {post.kind === 'video' ? (
+            <VideoPlayer
+              src={mediaUrl}
+              poster={post.poster_path ? fileUrl(post.poster_path) : ''}
+              className="md:rounded-md"
+            />
+          ) : post.audio_path || music ? (
+            <ImageWithSound
+              imageUrl={mediaUrl}
+              audioUrl={post.audio_path ? fileUrl(post.audio_path) : (music?.url ?? '')}
+              alt={`Photo by ${name}`}
+            />
+          ) : (
+            <button onClick={() => setFullscreen(true)} className="block w-full" aria-label="View photo full screen">
+              <img
+                src={mediaUrl}
+                alt={`Photo by ${name}`}
+                loading="lazy"
+                className="max-h-[80vh] w-full bg-card object-cover md:rounded-md"
+              />
+            </button>
+          )}
+        </div>
+      )}
+
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+          onClick={() => setFullscreen(false)}
+          role="dialog"
+          aria-label="Photo"
+        >
+          <img src={mediaUrl} alt={`Photo by ${name}`} className="max-h-full max-w-full object-contain" />
+          <button
+            onClick={() => setFullscreen(false)}
+            aria-label="Close"
+            className="absolute top-[max(1rem,env(safe-area-inset-top))] right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-2xl text-white"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       <footer className="mt-2 -ml-3 flex items-center">

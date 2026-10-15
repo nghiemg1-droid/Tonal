@@ -62,7 +62,7 @@ export default function ImageWithSound({ imageUrl, audioUrl, alt }: Props) {
         src={imageUrl}
         alt={alt}
         loading="lazy"
-        className="max-h-144 w-full rounded-xl bg-page object-cover"
+        className="max-h-[80vh] w-full bg-page object-cover md:rounded-md"
       />
 
       {blocked && (

@@ -53,8 +53,11 @@ function Privacy() {
         </ul>
         <p>
           We do <b>not</b> collect your location. Photos are re-drawn in your browser before upload, which
-          removes hidden data such as GPS coordinates. We don't use tracking or advertising cookies; the
-          app only stores your login session and settings (like dark mode) in your browser.
+          removes hidden data such as GPS coordinates. We don't use advertising cookies. To improve the app
+          we use privacy-friendly product analytics (which pages and features are used, linked to an
+          anonymous account id, not your email). When you record a voice clip in some browsers (like
+          Chrome), the browser's own speech service turns your words into a transcript; it's saved with the
+          clip so others can read it.
         </p>
       </Section>
 

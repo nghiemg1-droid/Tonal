@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { useUnreadCount } from './hooks/useUnreadCount'
 import { useUnreadChats } from './hooks/useUnreadChats'
+import { identifyUser, resetAnalytics } from './lib/analytics'
 import AuthForm from './components/AuthForm'
 import ThemeToggle from './components/ThemeToggle'
 import NavBar, { MessagesIcon } from './components/NavBar'
@@ -31,6 +32,12 @@ function LoggedInApp({ userId }: { userId: string }) {
   const unreadChats = useUnreadChats(userId)
   const markSeen = useCallback(() => setUnread(0), [setUnread])
 
+  // Analytics: link events to this account (an id only, never the email)
+  useEffect(() => {
+    identifyUser(userId)
+    return () => resetAnalytics()
+  }, [userId])
+
   // Housekeeping: delete my stories that ended, and their files, so storage stays small
   useEffect(() => {
     supabase.rpc('cleanup_my_expired_stories').then(({ data }) => {
@@ -46,10 +53,9 @@ function LoggedInApp({ userId }: { userId: string }) {
 
         {/* Phone: top bar with the logo and the light/dark switch */}
         <header className="sticky top-0 z-10 flex pt-[env(safe-area-inset-top)] items-center justify-between border-b border-line bg-card px-4 py-1 md:hidden">
-          <span className="flex items-center gap-2">
+          <Link to="/" aria-label="Home">
             <Logo className="h-8 w-8" />
-            <span className="text-2xl font-bold text-brand">Tonal</span>
-          </span>
+          </Link>
           <span className="flex items-center gap-1">
             <Link to="/messages" aria-label="Messages" className="p-2 text-ink">
               <span className="relative block">

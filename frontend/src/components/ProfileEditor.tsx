@@ -11,6 +11,8 @@ type Profile = {
   display_name: string | null
   avatar_url: string | null
   bio: string | null
+  is_private: boolean
+  founding_member: boolean
 }
 
 type Props = {
@@ -19,7 +21,7 @@ type Props = {
 }
 
 const USERNAME_RULE = /^[a-z0-9_]{3,20}$/
-const PROFILE_FIELDS = 'id, username, display_name, avatar_url, bio'
+const PROFILE_FIELDS = 'id, username, display_name, avatar_url, bio, is_private, founding_member'
 
 export default function ProfileEditor({ userId, refreshKey }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -158,6 +160,17 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
     }
   }
 
+  async function togglePrivate() {
+    if (!profile) return
+    const next = !profile.is_private
+    setProfile({ ...profile, is_private: next })
+    const { error } = await supabase.from('profiles').update({ is_private: next }).eq('id', userId)
+    if (error) {
+      setError(error.message)
+      setProfile({ ...profile, is_private: !next })
+    }
+  }
+
   if (!profile) {
     return error ? <p className="text-sm text-red-500">{error}</p> : null
   }
@@ -249,7 +262,19 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
             </label>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate font-semibold text-ink">{name}</p>
+              <p className="truncate font-semibold text-ink">
+                {name}
+                {profile.founding_member && (
+                  <span title="Founding member" className="ml-1 text-sm">
+                    🏅
+                  </span>
+                )}
+                {profile.is_private && (
+                  <span title="Private account" className="ml-1 text-sm">
+                    🔒
+                  </span>
+                )}
+              </p>
               <p className="truncate text-sm text-muted">@{profile.username}</p>
               <p className="mt-1 text-sm text-muted">
                 <span className="font-semibold text-ink">{counts.posts}</span> posts ·{' '}
@@ -272,6 +297,27 @@ export default function ProfileEditor({ userId, refreshKey }: Props) {
           </div>
 
           {profile.bio && <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{profile.bio}</p>}
+          {profile.founding_member && (
+            <p className="mt-2 text-xs font-medium text-brand">🏅 Founding member of Tonal</p>
+          )}
+
+          <label className="mt-4 flex cursor-pointer items-center justify-between rounded-xl bg-page px-3 py-2">
+            <span>
+              <span className="block text-sm font-medium text-ink">Private account</span>
+              <span className="block text-xs text-muted">Only people you approve see your posts and stories</span>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={profile.is_private}
+              onClick={togglePrivate}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${profile.is_private ? 'bg-brand' : 'bg-line'}`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${profile.is_private ? 'left-5.5' : 'left-0.5'}`}
+              />
+            </button>
+          </label>
           {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
           {list && <FollowList userId={userId} kind={list} onClose={() => setList(null)} />}
         </>

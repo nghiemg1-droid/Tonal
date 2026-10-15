@@ -6,7 +6,7 @@ import Avatar from '../components/Avatar'
 
 type Notification = {
   id: string
-  type: 'like' | 'comment' | 'follow' | 'mention'
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'follow_request'
   read_at: string | null
   created_at: string
   actor: {
@@ -31,6 +31,7 @@ const MESSAGES = {
   comment: 'commented on your post.',
   follow: 'started following you.',
   mention: 'mentioned you.',
+  follow_request: 'wants to follow you.',
 }
 
 type Props = {
@@ -40,6 +41,19 @@ type Props = {
 
 export default function NotificationsPage({ userId, onSeen }: Props) {
   const [items, setItems] = useState<Notification[]>([])
+
+  // Private account: approve or decline someone who wants to follow you
+  async function answerRequest(item: Notification, accept: boolean) {
+    const { error } = accept
+      ? await supabase.rpc('accept_follow_request', { requester: item.actor.id })
+      : await supabase.from('follow_requests').delete().eq('requester_id', item.actor.id).eq('target_id', userId)
+    if (error) return
+    setItems((prev) =>
+      accept
+        ? prev.map((n) => (n.id === item.id ? { ...n, type: 'follow' as const } : n))
+        : prev.filter((n) => n.id !== item.id),
+    )
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -108,6 +122,23 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
                 {MESSAGES[item.type]}{' '}
                 <span className="text-muted">{timeAgo(item.created_at)}</span>
               </p>
+
+              {item.type === 'follow_request' && (
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    onClick={() => answerRequest(item, true)}
+                    className="rounded-lg bg-brand px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => answerRequest(item, false)}
+                    className="rounded-lg border border-line px-3 py-1 text-xs font-semibold text-ink"
+                  >
+                    Decline
+                  </button>
+                </div>
+              )}
 
               {item.post && (
                 <Link to={`/p/${item.post.id}`} className="shrink-0">

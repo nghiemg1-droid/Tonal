@@ -17,6 +17,7 @@ type Comment = {
   body: string | null
   media_path: string | null
   duration_ms: number | null
+  transcript?: string | null
   created_at: string
   author: {
     id: string
@@ -30,7 +31,7 @@ type Mode = Comment['kind']
 
 const TEXT_MAX = 300
 const FIELDS =
-  'id, kind, body, media_path, duration_ms, created_at, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)'
+  'id, kind, body, media_path, duration_ms, transcript, created_at, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)'
 
 function fileUrl(path: string) {
   return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
@@ -117,6 +118,7 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
     try {
       let body: string | null = null
       let durationMs: number | null = null
+      let transcript: string | null = null
 
       if (mode === 'text') {
         body = text.trim()
@@ -131,6 +133,7 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
           contentType = blob.type.split(';')[0] || 'audio/webm'
           ext = audioExtension(contentType)
           durationMs = recording.durationMs
+          transcript = recording.transcript ?? null
         } else if (mode === 'image') {
           if (!imageFile) return
           blob = await makePostImage(imageFile, 1080)
@@ -162,6 +165,7 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
           body,
           media_path: path,
           duration_ms: durationMs,
+          transcript,
         })
         .select(FIELDS)
         .single()
@@ -234,6 +238,7 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
                       <VoicePlayer
                         src={fileUrl(comment.media_path)}
                         durationMs={comment.duration_ms ?? 0}
+                        transcript={comment.transcript}
                       />
                     ) : comment.media_path ? (
                       <img

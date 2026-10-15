@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { useNavigate, useSearchParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { encodeCanvas, makePostImage } from '../lib/image'
 import VoiceRecorder from '../components/VoiceRecorder'
@@ -10,6 +10,7 @@ import MusicPicker from '../components/MusicPicker'
 import MusicCredit from '../components/MusicCredit'
 import { trackToColumns } from '../lib/music'
 import { checkVideoFile, MAX_VIDEO_MS, readVideo, videoExtension } from '../lib/video'
+import { track } from '../lib/analytics'
 import type { Track } from '../lib/music'
 
 type Mode = 'voice' | 'image' | 'video'
@@ -30,7 +31,10 @@ function baseType(blob: Blob, fallback: string) {
 
 export default function CreatePostPage({ userId }: { userId: string }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const prompt = params.get('prompt') // "Question of the day" answer
   const [mode, setMode] = useState<Mode>('voice')
+  const [voiceCaption, setVoiceCaption] = useState(prompt ? `${prompt} #qotd` : '')
 
   // Voice post
   const [recording, setRecording] = useState<Recording | null>(null)
@@ -148,6 +152,11 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         const type = baseType(recording.blob, 'audio/webm')
         mediaPath = await upload(recording.blob, type, audioExtension(type))
         durationMs = recording.durationMs
+        const text = voiceCaption.trim()
+        if (text) {
+          captionKind = 'text'
+          captionText = text
+        }
       } else {
         if (!imageFile) return
 
@@ -194,11 +203,13 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         caption_text: captionText,
         caption_path: captionPath,
         caption_duration_ms: captionDurationMs,
+        transcript: mode === 'voice' ? (recording?.transcript ?? null) : null,
         poster_path: posterPath,
         ...trackToColumns(mode === 'image' && soundMode === 'music' ? music : null),
       })
       if (insertError) throw new Error(insertError.message)
 
+      track('post_created', { kind: mode, qotd: !!prompt })
       navigate('/')
     } catch (err) {
       // Don't leave orphan files behind if something failed
@@ -261,7 +272,20 @@ export default function CreatePostPage({ userId }: { userId: string }) {
 
       {/* Everything stays mounted so switching tabs doesn't lose your work */}
       <div className={mode === 'voice' ? '' : 'hidden'}>
+        {prompt && (
+          <p className="mb-3 rounded-xl bg-brand/10 p-3 text-center text-sm font-medium text-ink">
+            💬 {prompt}
+          </p>
+        )}
         <VoiceRecorder onChange={setRecording} />
+        <textarea
+          value={voiceCaption}
+          onChange={(e) => setVoiceCaption(e.target.value)}
+          maxLength={300}
+          rows={2}
+          placeholder="Add a caption… use #hashtags and @mentions (optional)"
+          className="mt-3 w-full resize-none rounded-lg border border-line bg-page px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
+        />
       </div>
 
       <div className={mode === 'image' ? 'flex flex-col items-center gap-3' : 'hidden'}>

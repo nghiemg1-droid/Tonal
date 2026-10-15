@@ -9,12 +9,23 @@ function formatTime(ms: number) {
 type Props = {
   src: string
   durationMs: number
+  transcript?: string | null // words of the clip, shown with the CC button
 }
 
-export default function VoicePlayer({ src, durationMs }: Props) {
+const SPEEDS = [1, 1.5, 2]
+
+export default function VoicePlayer({ src, durationMs, transcript }: Props) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [currentMs, setCurrentMs] = useState(0)
+  const [speed, setSpeed] = useState(1)
+  const [showText, setShowText] = useState(false)
+
+  function nextSpeed() {
+    const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]
+    setSpeed(next)
+    if (audioRef.current) audioRef.current.playbackRate = next
+  }
 
   // Stop playing if the post leaves the screen (e.g. changing page)
   useEffect(() => {
@@ -36,7 +47,8 @@ export default function VoicePlayer({ src, durationMs }: Props) {
   const progress = Math.min(currentMs / durationMs, 1)
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-page p-3">
+    <div className="flex flex-col gap-2 rounded-2xl bg-page p-3">
+    <div className="flex items-center gap-3">
       <button
         onClick={toggle}
         aria-label={playing ? 'Pause' : 'Play'}
@@ -53,11 +65,31 @@ export default function VoicePlayer({ src, durationMs }: Props) {
         {formatTime(playing || currentMs > 0 ? currentMs : durationMs)}
       </span>
 
+      <button
+        onClick={nextSpeed}
+        aria-label={`Playback speed ${speed}x`}
+        className="w-9 shrink-0 rounded-full bg-card py-0.5 text-xs font-semibold text-ink"
+      >
+        {speed}×
+      </button>
+      {transcript && (
+        <button
+          onClick={() => setShowText((v) => !v)}
+          aria-label={showText ? 'Hide words' : 'Show words'}
+          className={`shrink-0 rounded px-1 text-[10px] font-bold ${showText ? 'bg-ink text-page' : 'border border-muted text-muted'}`}
+        >
+          CC
+        </button>
+      )}
+
       <audio
         ref={audioRef}
         src={src}
         preload="none"
-        onPlay={() => setPlaying(true)}
+        onPlay={(e) => {
+          e.currentTarget.playbackRate = speed
+          setPlaying(true)
+        }}
         onPause={() => setPlaying(false)}
         onEnded={() => {
           setPlaying(false)
@@ -65,6 +97,8 @@ export default function VoicePlayer({ src, durationMs }: Props) {
         }}
         onTimeUpdate={(e) => setCurrentMs(e.currentTarget.currentTime * 1000)}
       />
+    </div>
+    {showText && transcript && <p className="text-sm text-ink">“{transcript}”</p>}
     </div>
   )
 }

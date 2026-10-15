@@ -5,6 +5,7 @@ import { useStories } from '../hooks/useStories'
 import PostCard from '../components/PostCard'
 import type { Post } from '../components/PostCard'
 import StoryBar from '../components/StoryBar'
+import QuestionOfTheDay from '../components/QuestionOfTheDay'
 import StoryViewer from '../components/StoryViewer'
 import type { StoryGroup } from '../components/StoryViewer'
 import { addLikeInfo, POST_FIELDS } from '../lib/posts'
@@ -107,6 +108,8 @@ export default function HomePage({ userId }: { userId: string }) {
         onChanged={reloadStories}
         onOpen={setViewingStory}
       />
+
+      <QuestionOfTheDay />
 
       {error && <p className="text-sm text-red-500">{error}</p>}
 

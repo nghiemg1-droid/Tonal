@@ -18,6 +18,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import ReportDialog from '../components/ReportDialog'
 import ThemePicker from '../components/ThemePicker'
 import { getChatTheme } from '../lib/chatThemes'
+import { track } from '../lib/analytics'
 import { blockUser, unblockUser } from '../lib/safety'
 import type { ReportTarget } from '../lib/safety'
 import {
@@ -44,7 +45,7 @@ type Info = {
 }
 
 const MESSAGE_FIELDS =
-  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, file_size, reply_to_id, deleted_at, view_once, story_id, post_id, created_at'
+  'id, conversation_id, sender_id, kind, body, media_path, duration_ms, file_size, reply_to_id, deleted_at, view_once, story_id, post_id, transcript, created_at'
 const PAGE = 40
 const REACTIONS = ['❤️', '😂', '😮', '😢', '😡', '👍']
 const FILE_ACCEPT = '.pdf,.txt,.csv,.zip,.doc,.docx,.xls,.xlsx,.ppt,.pptx'
@@ -123,6 +124,7 @@ export default function ChatPage({ userId }: { userId: string }) {
   const [showInfo, setShowInfo] = useState(false)
   const [headerMenu, setHeaderMenu] = useState(false)
   const [pickingTheme, setPickingTheme] = useState(false)
+  const [streak, setStreak] = useState(0)
   const [blockedByMe, setBlockedByMe] = useState(false)
   const [report, setReport] = useState<{ type: ReportTarget; id: string; label: string } | null>(null)
   const [sending, setSending] = useState(false)
@@ -426,6 +428,22 @@ export default function ChatPage({ userId }: { userId: string }) {
     }
   }
 
+  // 🔥 streak with this person (refreshes when a new message arrives)
+  const lastMessageId = messages[messages.length - 1]?.id
+  useEffect(() => {
+    let cancelled = false
+    supabase.rpc('my_dm_streaks').then(({ data }) => {
+      if (cancelled) return
+      const row = ((data ?? []) as { conversation_id: string; streak: number }[]).find(
+        (r) => r.conversation_id === conversationId,
+      )
+      setStreak(row?.streak ?? 0)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId, lastMessageId])
+
   async function pickTheme(id: string) {
     setPickingTheme(false)
     setInfo((prev) => (prev ? { ...prev, theme: id } : prev))
@@ -493,6 +511,7 @@ export default function ChatPage({ userId }: { userId: string }) {
     if (error) throw error
     addMessage(data as Message)
     setReplyTo(null)
+    track('message_sent', { kind: String(fields.kind ?? 'text') })
   }
 
   async function uploadFile(blob: Blob, contentType: string, ext: string) {
@@ -639,7 +658,7 @@ export default function ChatPage({ userId }: { userId: string }) {
       const type = rec.blob.type.split(';')[0] || 'audio/webm'
       const path = await uploadFile(rec.blob, type, audioExtension(type))
       try {
-        await insertMessage({ kind: 'voice', media_path: path, duration_ms: rec.durationMs })
+        await insertMessage({ kind: 'voice', media_path: path, duration_ms: rec.durationMs, transcript: rec.transcript ?? null })
       } catch (err) {
         await supabase.storage.from('messages').remove([path])
         throw err
@@ -750,7 +769,10 @@ export default function ChatPage({ userId }: { userId: string }) {
           )}
           {info?.is_group && <p className="text-xs text-muted">{info.members.length} members</p>}
           {info && !info.is_group && others[0] && (
-            <p className="truncate text-xs text-muted">@{others[0].username}</p>
+            <p className="truncate text-xs text-muted">
+              @{others[0].username}
+              {streak > 0 && <span className="ml-1.5 font-semibold text-orange-500">🔥 {streak}-day streak</span>}
+            </p>
           )}
         </div>
         {info && (
@@ -934,7 +956,7 @@ export default function ChatPage({ userId }: { userId: string }) {
                   {!m.deleted_at && m.kind === 'voice' && (
                     <div className="w-60" onDoubleClick={() => setMenuFor(m.id)}>
                       {url ? (
-                        <VoicePlayer src={url} durationMs={m.duration_ms ?? 1} />
+                        <VoicePlayer src={url} durationMs={m.duration_ms ?? 1} transcript={m.transcript} />
                       ) : (
                         <span className="block h-16 animate-pulse rounded-2xl bg-line" />
                       )}
