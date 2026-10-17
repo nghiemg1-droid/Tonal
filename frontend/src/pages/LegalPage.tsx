@@ -86,6 +86,17 @@ function Privacy() {
             your other posts can see them. You never have to show where you are.
           </li>
           <li>
+            <b>School email:</b> to take part in invites and gifts you can verify a school email (.edu). We
+            email it a code, then keep only a one-way fingerprint of the address (so it can't be used twice)
+            and the school's domain — not the address itself. It doesn't change how you log in.
+          </li>
+          <li>
+            <b>Invites & gifts:</b> if you sign up with a friend's invite link, that friend can see your
+            username and whether you've finished the steps (school email verified, posted on 3 days). To mail a
+            gift, we ask for your name and campus mailbox; only the Tonal team can see them and they are
+            deleted once the gift is sent.
+          </li>
+          <li>
             <b>Posting streaks:</b> we keep which days you posted (just the dates) to count your streak.
             Others can see your streak bean, badges and the Hall of Fame list unless you turn on “Hide my
             streak”. Private accounts are never listed in the Hall of Fame.

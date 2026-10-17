@@ -39,6 +39,13 @@ export default function ProfilePage({ userId }: { userId: string }) {
       </Link>
 
       <Link
+        to="/invite"
+        className="flex w-full max-w-sm items-center justify-center gap-2 rounded-xl border border-line bg-card py-2 text-sm font-medium text-ink hover:bg-page"
+      >
+        🎁 Invite friends & get Tonal merch
+      </Link>
+
+      <Link
         to="/saved"
         className="flex w-full max-w-sm items-center justify-center gap-2 rounded-xl border border-line bg-card py-2 text-sm font-medium text-ink hover:bg-page"
       >

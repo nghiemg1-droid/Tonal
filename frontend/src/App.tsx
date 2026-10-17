@@ -31,6 +31,9 @@ import LineCheckPage from './pages/LineCheckPage'
 import DropPage from './pages/DropPage'
 import GuessSpotPage from './pages/GuessSpotPage'
 import StreakPage from './pages/StreakPage'
+import InvitePage from './pages/InvitePage'
+import AdminRewardsPage from './pages/AdminRewardsPage'
+import { peekRef, saveRefFromUrl, takeRef } from './lib/rewards'
 import HallOfFamePage from './pages/HallOfFamePage'
 
 // Everything a logged-in user sees
@@ -43,6 +46,13 @@ function LoggedInApp({ userId }: { userId: string }) {
   useEffect(() => {
     identifyUser(userId)
     return () => resetAnalytics()
+  }, [userId])
+
+  // Opened an invite link before signing up? Tell the database who invited me (only counts for new accounts)
+  useEffect(() => {
+    saveRefFromUrl(window.location.search)
+    const ref = takeRef()
+    if (ref) supabase.rpc('set_referrer', { code: ref }).then(() => {})
   }, [userId])
 
   // Housekeeping: delete my stories that ended, and their files, so storage stays small
@@ -103,6 +113,9 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/guess" element={<GuessSpotPage userId={userId} />} />
               <Route path="/streak" element={<StreakPage userId={userId} />} />
               <Route path="/hall" element={<HallOfFamePage />} />
+              <Route path="/invite" element={<InvitePage userId={userId} />} />
+              <Route path="/admin/rewards" element={<AdminRewardsPage />} />
+              <Route path="/join" element={<Navigate to="/" replace />} />
               <Route path="/tags/:tag" element={<TagPage />} />
               <Route path="/saved" element={<SavedPage userId={userId} />} />
               <Route path="/u/:username" element={<UserProfilePage userId={userId} />} />
@@ -127,6 +140,10 @@ function LoggedInApp({ userId }: { userId: string }) {
 function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [invitedBy] = useState(() => {
+    saveRefFromUrl(window.location.search) // remember an invite link (?ref=username)
+    return peekRef()
+  })
 
   useEffect(() => {
     // Check if the user is already logged in
@@ -175,6 +192,7 @@ function App() {
         <h1 className="text-5xl font-bold tracking-tight text-ink animate-fade-up">
           Welcome to <span className="text-brand">Tonal</span>
         </h1>
+        {invitedBy && <p className="-mt-2 text-sm text-muted animate-fade-up">🎉 @{invitedBy} invited you</p>}
         <AuthForm />
         <LoginTroubleshooting />
       </main>

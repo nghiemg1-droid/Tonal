@@ -117,7 +117,9 @@ export default function StreakPage({ userId }: { userId: string }) {
       <Link to="/hall" className="rounded-full border border-line bg-card py-2.5 text-center font-semibold text-ink hover:bg-page">
         🏆 Hall of Fame
       </Link>
-      <p className="text-center text-xs text-muted">Rewards are just for fun inside Tonal — no prizes or money.</p>
+      <Link to="/invite" className="rounded-full border border-line bg-card py-2.5 text-center font-semibold text-ink hover:bg-page">
+        🎁 30 and 100 days also earn Tonal merch
+      </Link>
     </div>
   )
 }

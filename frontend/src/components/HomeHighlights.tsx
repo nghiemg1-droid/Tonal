@@ -101,6 +101,9 @@ function LineCheckStrip() {
       <Link to="/guess" className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink">
         📍 Guess the Spot
       </Link>
+      <Link to="/invite" className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink">
+        🎁 Invite & win merch
+      </Link>
     </div>
   )
 }
