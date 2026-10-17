@@ -17,6 +17,8 @@ import CommentSection from './CommentSection'
 import ReportDialog from './ReportDialog'
 import { blockUser } from '../lib/safety'
 import { StoryRing } from './StoryBar'
+import { useMyStreak } from '../hooks/useMyStreak'
+import { unlocks } from '../lib/streaks'
 import type { StoryGroup } from './StoryViewer'
 
 export type Post = Partial<MusicColumns> & {
@@ -101,6 +103,9 @@ export default function PostCard({
   const canEditCaption = post.caption_kind === null || post.caption_kind === 'text'
 
   const isMine = post.author.id === userId
+  const { streak } = useMyStreak()
+  const canPin = isMine && unlocks(streak?.best ?? 0).pin
+  const [pinned, setPinned] = useState(false)
   const mediaUrl = fileUrl(post.media_path)
   const name = post.author.display_name || post.author.username
   const music = columnsToTrack(post)
@@ -170,7 +175,7 @@ export default function PostCard({
             aria-label={`View ${post.author.username}'s story`}
             className="rounded-full"
           >
-            <StoryRing active seen={storyGroup.stories.every((s) => s.seen)}>
+            <StoryRing active seen={storyGroup.stories.every((s) => s.seen)} streakBest={storyGroup.person.streak_best}>
               <Avatar name={name} url={post.author.avatar_url} className="h-8 w-8 text-sm" />
             </StoryRing>
           </button>
@@ -217,6 +222,18 @@ export default function PostCard({
                       className={`${menuItem} text-ink`}
                     >
                       Edit caption
+                    </button>
+                  )}
+                  {canPin && (
+                    <button
+                      onClick={async () => {
+                        setMenuOpen(false)
+                        const { error } = await supabase.from('profiles').update({ pinned_post_id: post.id }).eq('id', userId)
+                        if (!error) setPinned(true)
+                      }}
+                      className={`${menuItem} text-ink`}
+                    >
+                      {pinned ? '📌 Pinned ✓' : '📌 Pin to profile'}
                     </button>
                   )}
                   <button

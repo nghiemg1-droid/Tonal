@@ -8,6 +8,8 @@ import Avatar from '../components/Avatar'
 import PostGrid from '../components/PostGrid'
 import FollowList from '../components/FollowList'
 import ReportDialog from '../components/ReportDialog'
+import ProfileStreak, { AvatarFrame, useStreakLevel } from '../components/ProfileStreak'
+import PinnedPost from '../components/PinnedPost'
 
 type Profile = {
   id: string
@@ -17,6 +19,8 @@ type Profile = {
   bio: string | null
   is_private: boolean
   founding_member: boolean
+  accent: string | null
+  pinned_post_id: string | null
 }
 
 type Counts = { posts: number; followers: number; following: number }
@@ -45,7 +49,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     async function load() {
       const { data } = await supabase
         .from('profiles')
-        .select('id, username, display_name, avatar_url, bio, is_private, founding_member')
+        .select('id, username, display_name, avatar_url, bio, is_private, founding_member, accent, pinned_post_id')
         .eq('username', username.toLowerCase())
         .maybeSingle()
       if (cancelled) return
@@ -75,6 +79,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     }
   }, [username, userId])
 
+  const streakLevel = useStreakLevel(profile?.id)
   const { posts, hasMore, loadMore, loading } = useGridPosts({ authorId: profile?.id ?? '00000000-0000-0000-0000-000000000000' })
 
   if (profile && profile.id === userId) return <Navigate to="/profile" replace />
@@ -156,7 +161,9 @@ export default function UserProfilePage({ userId }: { userId: string }) {
     <div className="flex w-full flex-col gap-5 animate-fade-up">
       {/* Header */}
       <div className="flex items-center gap-5">
-        <Avatar name={name} url={profile.avatar_url} className="h-20 w-20 text-3xl" />
+        <AvatarFrame best={streakLevel?.best}>
+          <Avatar name={name} url={profile.avatar_url} className="h-20 w-20 text-3xl" />
+        </AvatarFrame>
         <div className="flex flex-1 justify-around">
           <div className={stat}>
             <span className={statNumber}>{counts.posts}</span>posts
@@ -172,7 +179,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
 
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="font-bold text-ink">
+          <h2 className="font-bold text-ink" style={profile.accent ? { color: profile.accent } : undefined}>
             {name}
             {profile.founding_member && (
               <span title="Founding member" className="ml-1 text-sm">
@@ -208,6 +215,9 @@ export default function UserProfilePage({ userId }: { userId: string }) {
           </div>
         </div>
         {profile.bio && <p className="mt-1 whitespace-pre-wrap text-sm text-ink">{profile.bio}</p>}
+        <div className="mt-2">
+          <ProfileStreak level={streakLevel} />
+        </div>
       </div>
 
       {blocked ? (
@@ -252,6 +262,7 @@ export default function UserProfilePage({ userId }: { userId: string }) {
           {!loading && posts.length === 0 && (
             <p className="py-10 text-center text-sm text-muted">No posts yet.</p>
           )}
+          <PinnedPost postId={profile.pinned_post_id} userId={userId} />
           <PostGrid posts={posts} />
           {hasMore && (
             <button onClick={loadMore} className="self-center text-sm text-brand">

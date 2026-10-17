@@ -5,6 +5,7 @@ export type ChatTheme = {
   name: string
   background: string | null // CSS background; null = the normal page color
   bubble: string | null // color of my messages; null = brand color
+  unlock?: number // best posting streak needed (days)
 }
 
 export const CHAT_THEMES: ChatTheme[] = [
@@ -18,6 +19,8 @@ export const CHAT_THEMES: ChatTheme[] = [
   { id: 'mint', name: 'Mint', background: 'linear-gradient(160deg, #ccfbf1 0%, #99f6e4 50%, #5eead4 100%)', bubble: '#0d9488' },
   { id: 'night', name: 'Night', background: 'linear-gradient(160deg, #1e1b4b 0%, #0f172a 60%, #020617 100%)', bubble: '#6366f1' },
   { id: 'mono', name: 'Mono', background: 'linear-gradient(160deg, #f3f4f6 0%, #d1d5db 60%, #9ca3af 100%)', bubble: '#111827' },
+  { id: 'aurora', name: 'Aurora', background: 'linear-gradient(160deg, #0f172a 0%, #134e4a 35%, #22d3ee 70%, #a78bfa 100%)', bubble: '#14b8a6', unlock: 7 },
+  { id: 'golden', name: 'Golden', background: 'linear-gradient(160deg, #fef9c3 0%, #fde047 45%, #f59e0b 100%)', bubble: '#b45309', unlock: 100 },
 ]
 
 export function getChatTheme(id: string | null | undefined): ChatTheme {

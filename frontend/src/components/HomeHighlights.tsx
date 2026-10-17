@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import StreakCard from './StreakCard'
 import { supabase } from '../lib/supabase'
 import { dropState, formatClock } from '../lib/campusDrop'
 import type { DropState } from '../lib/campusDrop'
@@ -10,6 +11,7 @@ import type { LineReport } from '../lib/lineCheck'
 export default function HomeHighlights() {
   return (
     <div className="flex w-full flex-col gap-2">
+      <StreakCard />
       <CampusDropBanner />
       <LineCheckStrip />
     </div>

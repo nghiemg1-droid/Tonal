@@ -30,6 +30,8 @@ import SavedPage from './pages/SavedPage'
 import LineCheckPage from './pages/LineCheckPage'
 import DropPage from './pages/DropPage'
 import GuessSpotPage from './pages/GuessSpotPage'
+import StreakPage from './pages/StreakPage'
+import HallOfFamePage from './pages/HallOfFamePage'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
@@ -99,6 +101,8 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/line" element={<LineCheckPage userId={userId} />} />
               <Route path="/drop" element={<DropPage />} />
               <Route path="/guess" element={<GuessSpotPage userId={userId} />} />
+              <Route path="/streak" element={<StreakPage userId={userId} />} />
+              <Route path="/hall" element={<HallOfFamePage />} />
               <Route path="/tags/:tag" element={<TagPage />} />
               <Route path="/saved" element={<SavedPage userId={userId} />} />
               <Route path="/u/:username" element={<UserProfilePage userId={userId} />} />

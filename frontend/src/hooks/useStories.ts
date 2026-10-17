@@ -37,8 +37,16 @@ export function useStories(userId: string) {
       : { data: [] }
     const seenIds = new Set((views ?? []).map((v) => v.story_id as string))
 
+    // Special story rings for long posting streaks
+    const authorIds = [...new Set(rows.map((r) => r.author.id))]
+    const { data: levels } = authorIds.length
+      ? await supabase.rpc('streak_levels', { uids: authorIds })
+      : { data: [] }
+    const bestById = new Map(((levels ?? []) as { user_id: string; best_streak: number }[]).map((l) => [l.user_id, l.best_streak]))
+
     const byPerson = new Map<string, StoryGroup>()
-    for (const { author, ...story } of rows) {
+    for (const { author: rawAuthor, ...story } of rows) {
+      const author = { ...rawAuthor, streak_best: bestById.get(rawAuthor.id) ?? null }
       const group = byPerson.get(author.id) ?? { person: author, stories: [] }
       // my own stories always count as seen
       group.stories.push({ ...story, seen: author.id === userId || seenIds.has(story.id) })

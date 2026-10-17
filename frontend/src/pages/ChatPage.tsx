@@ -17,6 +17,7 @@ import DrawingPad from '../components/DrawingPad'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import ReportDialog from '../components/ReportDialog'
 import ThemePicker from '../components/ThemePicker'
+import StreakBean from '../components/StreakBean'
 import { getChatTheme } from '../lib/chatThemes'
 import { track } from '../lib/analytics'
 import { blockUser, unblockUser } from '../lib/safety'
@@ -771,7 +772,11 @@ export default function ChatPage({ userId }: { userId: string }) {
           {info && !info.is_group && others[0] && (
             <p className="truncate text-xs text-muted">
               @{others[0].username}
-              {streak > 0 && <span className="ml-1.5 font-semibold text-orange-500">🔥 {streak}-day streak</span>}
+              {streak > 0 && (
+                <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle font-semibold text-ink">
+                  <StreakBean days={streak} size={16} /> {streak}-day streak
+                </span>
+              )}
             </p>
           )}
         </div>

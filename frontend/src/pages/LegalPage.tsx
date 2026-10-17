@@ -86,6 +86,11 @@ function Privacy() {
             your other posts can see them. You never have to show where you are.
           </li>
           <li>
+            <b>Posting streaks:</b> we keep which days you posted (just the dates) to count your streak.
+            Others can see your streak bean, badges and the Hall of Fame list unless you turn on “Hide my
+            streak”. Private accounts are never listed in the Hall of Fame.
+          </li>
+          <li>
             Files in posts and stories are stored at long, hard-to-guess links. Anyone who is given such a
             link can open that one file, so think before sharing links outside {APP_NAME}.
           </li>

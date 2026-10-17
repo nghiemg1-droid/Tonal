@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import StreakBean from '../components/StreakBean'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import { PERSON_FIELDS, personName } from '../lib/chat'
@@ -119,8 +120,9 @@ export default function InboxPage({ userId }: { userId: string }) {
                   <p className={`truncate text-ink ${unread ? 'font-bold' : 'font-medium'}`}>
                     {title}
                     {streaks[c.id] && (
-                      <span title={`${streaks[c.id]}-day streak`} className="ml-1.5 text-sm font-semibold text-orange-500">
-                        🔥{streaks[c.id]}
+                      <span title={`${streaks[c.id]}-day chat streak`} className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-sm font-semibold text-ink">
+                        <StreakBean days={streaks[c.id]} size={18} />
+                        {streaks[c.id]}
                       </span>
                     )}
                   </p>

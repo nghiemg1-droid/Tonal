@@ -18,6 +18,7 @@ export type Person = {
   username: string
   display_name: string | null
   avatar_url: string | null
+  streak_best?: number | null // best posting streak (for the special story ring)
 }
 
 export type Story = Partial<MusicColumns> & {
