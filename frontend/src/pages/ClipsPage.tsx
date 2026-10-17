@@ -78,8 +78,8 @@ export default function ClipsPage({ userId }: { userId: string }) {
         <div className="flex h-full flex-col items-center justify-center gap-3 text-white">
           <span className="text-5xl">🎬</span>
           <p>No videos yet.</p>
-          <Link to="/new" className="rounded-full bg-brand px-4 py-2 text-sm font-medium">
-            Post the first one
+          <Link to="/new?record=1" className="rounded-full bg-brand px-4 py-2 text-sm font-medium">
+            🎥 Record the first one
           </Link>
         </div>
       )}
@@ -147,6 +147,15 @@ export default function ClipsPage({ userId }: { userId: string }) {
           </section>
         )
       })}
+
+      {/* Record a clip */}
+      <Link
+        to="/new?record=1"
+        aria-label="Record a clip"
+        className="fixed top-[max(1rem,env(safe-area-inset-top))] right-4 z-30 flex h-11 items-center gap-1.5 rounded-full bg-white/90 px-4 text-sm font-bold text-black shadow-lg active:scale-95 md:right-8"
+      >
+        🎥 Record
+      </Link>
 
       {sharing && <SharePostDialog userId={userId} postId={sharing.id} onClose={() => setSharing(null)} />}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { supabase } from '../lib/supabase'
@@ -11,6 +11,7 @@ import MusicCredit from '../components/MusicCredit'
 import { trackToColumns } from '../lib/music'
 import { checkVideoFile, MAX_SOURCE_MS, readVideo, videoExtension } from '../lib/video'
 import VideoEditor from '../components/VideoEditor'
+import CameraRecorder from '../components/CameraRecorder'
 import { stripVideoLocation } from '../lib/videoMeta'
 import { compactEdit, DEFAULT_EDIT, editedSeconds, MAX_CLIP_SECONDS } from '../lib/videoEdit'
 import type { VideoEdit } from '../lib/videoEdit'
@@ -38,8 +39,9 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const [params] = useSearchParams()
   const prompt = params.get('prompt') // "Question of the day" answer
   const isDrop = params.get('drop') === '1' // posting during Campus Drop
+  const openCamera = params.get('record') === '1' // came from a "record" button
   const dropTag = isDrop ? '#CampusDrop ' : ''
-  const [mode, setMode] = useState<Mode>(isDrop ? 'image' : 'voice')
+  const [mode, setMode] = useState<Mode>(openCamera ? 'video' : isDrop ? 'image' : 'voice')
   const [voiceCaption, setVoiceCaption] = useState(prompt ? `${prompt} #qotd` : dropTag)
 
   // Voice post
@@ -65,6 +67,8 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const [videoCaption, setVideoCaption] = useState(dropTag)
   const [videoEdit, setVideoEdit] = useState<VideoEdit>(DEFAULT_EDIT)
   const [videoMusic, setVideoMusic] = useState<Track | null>(null)
+  const [cameraOpen, setCameraOpen] = useState(openCamera)
+  const videoInputRef = useRef<HTMLInputElement>(null)
   const [sourceSeconds, setSourceSeconds] = useState(0)
   // Where the clip goes: always Clips; Home feed and Story are your choice
   const [alsoFeed, setAlsoFeed] = useState(true)
@@ -94,7 +98,10 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   function handleVideoChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (!file) return
+    if (file) acceptVideo(file)
+  }
+
+  function acceptVideo(file: File) {
     const problem = checkVideoFile(file)
     if (problem) {
       setError(problem)
@@ -350,12 +357,22 @@ export default function CreatePostPage({ userId }: { userId: string }) {
             </div>
           </>
         ) : (
-          <label className="flex h-40 w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line text-muted hover:border-brand hover:text-brand transition">
-            <span className="text-4xl">🎬</span>
-            Tap to choose a video
-            <span className="text-xs">Clips up to 60 seconds (trim longer videos) · 50 MB</span>
-            <input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={handleVideoChange} className="sr-only" />
-          </label>
+          <div className="flex w-full flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setCameraOpen(true)}
+              className="flex h-32 w-full flex-col items-center justify-center gap-1 rounded-xl bg-brand text-white shadow-sm active:scale-[0.98] transition"
+            >
+              <span className="text-4xl">🎥</span>
+              <span className="font-bold">Record a clip</span>
+              <span className="text-xs text-white/80">Tap or hold to record · up to 60 s</span>
+            </button>
+            <label className="flex h-20 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-muted hover:border-brand hover:text-brand transition">
+              <span>📁 Upload a video</span>
+              <span className="text-xs">Up to 60 s after trimming · 50 MB</span>
+              <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime,video/webm" onChange={handleVideoChange} className="sr-only" />
+            </label>
+          </div>
         )}
       </div>
 
@@ -501,6 +518,22 @@ export default function CreatePostPage({ userId }: { userId: string }) {
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}
+
+      {cameraOpen && (
+        <CameraRecorder
+          onClose={() => setCameraOpen(false)}
+          onUploadInstead={() => {
+            setCameraOpen(false)
+            setMode('video')
+            window.setTimeout(() => videoInputRef.current?.click(), 50)
+          }}
+          onDone={(file) => {
+            setCameraOpen(false)
+            setMode('video')
+            acceptVideo(file)
+          }}
+        />
+      )}
 
       <button
         onClick={handlePost}

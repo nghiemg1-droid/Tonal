@@ -19,6 +19,25 @@ export function videoExtension(type: string): string {
   return 'mp4'
 }
 
+// Videos recorded in the browser often don't say how long they are (duration = Infinity).
+// Jumping far past the end makes the browser work it out.
+export function fixInfiniteDuration(video: HTMLVideoElement): Promise<number> {
+  if (Number.isFinite(video.duration)) return Promise.resolve(video.duration)
+  return new Promise((resolve) => {
+    const done = () => {
+      if (!Number.isFinite(video.duration)) return
+      video.removeEventListener('durationchange', done)
+      video.removeEventListener('timeupdate', done)
+      const seconds = video.duration
+      video.addEventListener('seeked', () => resolve(seconds), { once: true })
+      video.currentTime = 0
+    }
+    video.addEventListener('durationchange', done)
+    video.addEventListener('timeupdate', done)
+    video.currentTime = 1e101
+  })
+}
+
 function loadVideo(url: string): Promise<HTMLVideoElement> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video')
@@ -37,6 +56,7 @@ export async function readVideo(file: File, atSeconds?: number): Promise<{ durat
   const url = URL.createObjectURL(file)
   try {
     const video = await loadVideo(url)
+    await fixInfiniteDuration(video)
     const durationMs = Math.round(video.duration * 1000)
     if (!Number.isFinite(durationMs) || durationMs <= 0) throw new Error('Could not read the video length.')
 

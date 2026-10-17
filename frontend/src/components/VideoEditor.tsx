@@ -14,6 +14,7 @@ import {
 import type { VideoEdit } from '../lib/videoEdit'
 import type { Track } from '../lib/music'
 import { VideoTextOverlay } from './VideoPlayer'
+import { fixInfiniteDuration } from '../lib/video'
 import MusicPicker from './MusicPicker'
 import MusicCredit from './MusicCredit'
 
@@ -102,11 +103,11 @@ export default function VideoEditor({ src, edit, onChange, music, onMusicChange,
           preload="auto"
           muted={edit.volume === 0}
           onLoadedMetadata={(e) => {
-            const seconds = e.currentTarget.duration
-            if (Number.isFinite(seconds)) {
+            // recorded-in-app videos may not know their length yet: work it out
+            fixInfiniteDuration(e.currentTarget).then((seconds) => {
               setDuration(seconds)
               onDuration(seconds)
-            }
+            })
           }}
           onLoadedData={makeThumb}
           onPlay={() => setPaused(false)}
