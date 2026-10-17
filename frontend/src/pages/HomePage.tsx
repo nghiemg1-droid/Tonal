@@ -5,6 +5,7 @@ import { useStories } from '../hooks/useStories'
 import PostCard from '../components/PostCard'
 import type { Post } from '../components/PostCard'
 import StoryBar from '../components/StoryBar'
+import HomeHighlights from '../components/HomeHighlights'
 import QuestionOfTheDay from '../components/QuestionOfTheDay'
 import StoryViewer from '../components/StoryViewer'
 import type { StoryGroup } from '../components/StoryViewer'
@@ -109,6 +110,8 @@ export default function HomePage({ userId }: { userId: string }) {
         onChanged={reloadStories}
         onOpen={setViewingStory}
       />
+
+      <HomeHighlights />
 
       <QuestionOfTheDay />
 

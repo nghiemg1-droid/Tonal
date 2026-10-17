@@ -27,6 +27,9 @@ import PostPage from './pages/PostPage'
 import ClipsPage from './pages/ClipsPage'
 import TagPage from './pages/TagPage'
 import SavedPage from './pages/SavedPage'
+import LineCheckPage from './pages/LineCheckPage'
+import DropPage from './pages/DropPage'
+import GuessSpotPage from './pages/GuessSpotPage'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
@@ -93,6 +96,9 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/messages/:conversationId" element={<ChatPage userId={userId} />} />
               <Route path="/profile" element={<ProfilePage userId={userId} />} />
               <Route path="/clips" element={<ClipsPage userId={userId} />} />
+              <Route path="/line" element={<LineCheckPage userId={userId} />} />
+              <Route path="/drop" element={<DropPage />} />
+              <Route path="/guess" element={<GuessSpotPage userId={userId} />} />
               <Route path="/tags/:tag" element={<TagPage />} />
               <Route path="/saved" element={<SavedPage userId={userId} />} />
               <Route path="/u/:username" element={<UserProfilePage userId={userId} />} />

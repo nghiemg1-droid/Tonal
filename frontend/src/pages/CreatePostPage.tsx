@@ -36,8 +36,10 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const prompt = params.get('prompt') // "Question of the day" answer
-  const [mode, setMode] = useState<Mode>('voice')
-  const [voiceCaption, setVoiceCaption] = useState(prompt ? `${prompt} #qotd` : '')
+  const isDrop = params.get('drop') === '1' // posting during Campus Drop
+  const dropTag = isDrop ? '#CampusDrop ' : ''
+  const [mode, setMode] = useState<Mode>(isDrop ? 'image' : 'voice')
+  const [voiceCaption, setVoiceCaption] = useState(prompt ? `${prompt} #qotd` : dropTag)
 
   // Voice post
   const [recording, setRecording] = useState<Recording | null>(null)
@@ -51,15 +53,15 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   const [pickingMusic, setPickingMusic] = useState(false)
 
   // Caption (image posts only)
-  const [captionMode, setCaptionMode] = useState<CaptionMode>('none')
-  const [captionInput, setCaptionInput] = useState('')
+  const [captionMode, setCaptionMode] = useState<CaptionMode>(isDrop ? 'text' : 'none')
+  const [captionInput, setCaptionInput] = useState(dropTag)
   const [drawingCanvas, setDrawingCanvas] = useState<HTMLCanvasElement | null>(null)
   const [captionVoice, setCaptionVoice] = useState<Recording | null>(null)
 
   // Video post
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
-  const [videoCaption, setVideoCaption] = useState('')
+  const [videoCaption, setVideoCaption] = useState(dropTag)
   const [videoEdit, setVideoEdit] = useState<VideoEdit>(DEFAULT_EDIT)
   const [videoMusic, setVideoMusic] = useState<Track | null>(null)
   const [sourceSeconds, setSourceSeconds] = useState(0)
@@ -281,6 +283,11 @@ export default function CreatePostPage({ userId }: { userId: string }) {
   return (
     <div className="flex w-full max-w-sm flex-col gap-5 rounded-2xl border border-line bg-card p-6 shadow-sm animate-fade-up">
       <h2 className="text-xl font-bold text-ink">New post</h2>
+      {isDrop && (
+        <p className="rounded-xl bg-brand/10 p-3 text-center text-sm font-medium text-ink">
+          ⚡ Campus Drop — show what you're doing right now. No retakes, no filters!
+        </p>
+      )}
 
       <div className="flex gap-2 rounded-full bg-page p-1 text-sm">
         <button type="button" onClick={() => setMode('voice')} className={tabClass(mode === 'voice')}>
