@@ -1,3 +1,4 @@
+// @ts-nocheck -- runs on Supabase (Deno), not in the React app; VS Code can't check Deno code
 // Supabase Edge Function: emails a 6-digit code to a school (.edu) address.
 // Needs two secrets (Supabase → Edge Functions → Secrets):
 //   SMTP_USER = the Gmail address that sends codes (e.g. tonal.team.app@gmail.com)

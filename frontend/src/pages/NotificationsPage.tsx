@@ -3,10 +3,13 @@ import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from '../components/Avatar'
+import { GIFTS } from '../lib/rewards'
+import type { GiftId } from '../lib/rewards'
 
 type Notification = {
   id: string
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'follow_request'
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'follow_request' | 'reward_unlocked' | 'reward_shipped'
+  reward: GiftId | null
   read_at: string | null
   created_at: string
   actor: {
@@ -24,7 +27,7 @@ type Notification = {
 }
 
 const FIELDS =
-  'id, type, read_at, created_at, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), post:posts(id, kind, media_path, poster_path)'
+  'id, type, reward, read_at, created_at, actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), post:posts(id, kind, media_path, poster_path)'
 
 const MESSAGES = {
   like: 'liked your post.',
@@ -32,6 +35,8 @@ const MESSAGES = {
   follow: 'started following you.',
   mention: 'mentioned you.',
   follow_request: 'wants to follow you.',
+  reward_unlocked: '',
+  reward_shipped: '',
 }
 
 type Props = {
@@ -106,6 +111,33 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
         items.map((item) => {
           const name = item.actor.display_name || item.actor.username
           const isNew = item.read_at === null
+          if (item.type === 'reward_unlocked' || item.type === 'reward_shipped') {
+            const gift = item.reward ? GIFTS[item.reward] : null
+            return (
+              <Link
+                key={item.id}
+                to="/invite"
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ${isNew ? 'bg-brand/10' : ''}`}
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-yellow-200 text-2xl">
+                  {item.type === 'reward_unlocked' ? '🎁' : '📬'}
+                </span>
+                <p className="min-w-0 flex-1 text-sm text-ink">
+                  {item.type === 'reward_unlocked' ? (
+                    <>
+                      You unlocked a free <b>{gift?.name ?? 'Tonal gift'}</b>! Tap to claim it.
+                    </>
+                  ) : (
+                    <>
+                      Your <b>{gift?.name ?? 'Tonal gift'}</b> is on its way to your campus mailbox 💌
+                    </>
+                  )}{' '}
+                  <span className="text-muted">{timeAgo(item.created_at)}</span>
+                </p>
+                {gift && <span className="text-2xl">{gift.emoji}</span>}
+              </Link>
+            )
+          }
           return (
             <div
               key={item.id}
