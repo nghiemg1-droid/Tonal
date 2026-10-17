@@ -39,8 +39,8 @@ function Privacy() {
             <b>Profile:</b> username, display name and profile photo.
           </li>
           <li>
-            <b>What you share:</b> voice posts, photos, drawings, captions, comments, likes, follows and
-            stories.
+            <b>What you share:</b> voice posts, photos, short videos (with the edits and music you pick),
+            drawings, captions, comments, likes, follows, stories, and Line Check reports.
           </li>
           <li>
             <b>Messages:</b> the text, voice messages, photos, drawings, stickers, reactions and files you
@@ -53,7 +53,8 @@ function Privacy() {
         </ul>
         <p>
           We do <b>not</b> collect your location. Photos are re-drawn in your browser before upload, which
-          removes hidden data such as GPS coordinates. We don't use advertising cookies. To improve the app
+          removes hidden data such as GPS coordinates. Phones can also hide where a video was filmed inside
+          the video file; we remove that location data in your browser before a video is uploaded. We don't use advertising cookies. To improve the app
           we use privacy-friendly product analytics (which pages and features are used, linked to an
           anonymous account id, not your email). When you record a voice clip in some browsers (like
           Chrome), the browser's own speech service turns your words into a transcript; it's saved with the
@@ -75,6 +76,19 @@ function Privacy() {
           <li>Stories disappear from the app after 24 hours.</li>
           <li>Blocking someone hides your posts and stories from each other and stops their messages.</li>
           <li>Reports are seen only by the person running {APP_NAME}, never by the reported user.</li>
+          <li>
+            <b>Line Check</b> reports are anonymous: other users see the place, how busy it is, your note and
+            the time, never your name. We keep who sent a report only so you can delete it and so we can act
+            on abuse. Reports disappear after 1 hour and are deleted for good after 1 day.
+          </li>
+          <li>
+            <b>Campus Drop</b> and <b>Guess the Spot</b> posts are normal posts: the same people who can see
+            your other posts can see them. You never have to show where you are.
+          </li>
+          <li>
+            Files in posts and stories are stored at long, hard-to-guess links. Anyone who is given such a
+            link can open that one file, so think before sharing links outside {APP_NAME}.
+          </li>
         </ul>
         <p>
           Anyone who sees your content could still take a screenshot or save it. Please only share what

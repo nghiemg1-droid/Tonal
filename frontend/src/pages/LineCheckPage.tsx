@@ -1,63 +1,41 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ChangeEvent } from 'react'
 import { supabase } from '../lib/supabase'
-import { makePostImage } from '../lib/image'
 import { timeAgo } from '../lib/time'
 import { track } from '../lib/analytics'
 import { PLACES, STATUSES, agoLabel, statusInfo, summarize } from '../lib/lineCheck'
 import type { LineStatus } from '../lib/lineCheck'
-import Avatar from '../components/Avatar'
-import VoicePlayer from '../components/VoicePlayer'
-import VoiceRecorder from '../components/VoiceRecorder'
-import type { Recording } from '../components/VoiceRecorder'
 
-const VOICE_MAX_MS = 15_000
-
+// Reports are anonymous: we never load who wrote them (the database doesn't allow it)
 type Row = {
   id: string
   place: string
   status: LineStatus
   note: string | null
-  photo_path: string | null
-  voice_path: string | null
-  voice_duration_ms: number | null
   created_at: string
-  author: { id: string; username: string; display_name: string | null; avatar_url: string | null }
 }
 
-function fileUrl(path: string) {
-  return supabase.storage.from('stories').getPublicUrl(path).data.publicUrl
-}
-
-function audioExt(mime: string) {
-  if (mime.includes('mp4')) return 'm4a'
-  if (mime.includes('ogg')) return 'ogg'
-  return 'webm'
-}
-
-// "How long is the line right now?" — reports from students, gone after 1 hour
+// "How long is the line right now?" — anonymous reports from students, gone after 1 hour
 export default function LineCheckPage({ userId }: { userId: string }) {
   const [rows, setRows] = useState<Row[]>([])
   const [filter, setFilter] = useState<string | null>(null)
   const [reporting, setReporting] = useState(false)
+  const [mine, setMine] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     const { data } = await supabase
       .from('line_checks')
-      .select('id, place, status, note, photo_path, voice_path, voice_duration_ms, created_at, author:profiles!line_checks_author_id_fkey(id, username, display_name, avatar_url)')
+      .select('id, place, status, note, created_at')
       .order('created_at', { ascending: false })
       .limit(100)
-    setRows((data ?? []) as unknown as Row[])
+    setRows((data ?? []) as Row[])
+    const { data: ids } = await supabase.rpc('my_line_check_ids')
+    setMine(new Set((ids ?? []) as string[]))
   }, [])
 
   useEffect(() => {
     load()
     const timer = window.setInterval(load, 60_000) // lines change fast: refresh every minute
-    // Tidy up my old reports and their files
-    supabase.rpc('cleanup_my_expired_line_checks').then(({ data }) => {
-      const paths = (data ?? []) as string[]
-      if (paths.length) supabase.storage.from('stories').remove(paths)
-    })
+    supabase.rpc('cleanup_old_line_checks').then(() => {}) // delete day-old reports for good
     return () => window.clearInterval(timer)
   }, [load])
 
@@ -65,8 +43,6 @@ export default function LineCheckPage({ userId }: { userId: string }) {
     if (!window.confirm('Delete this report?')) return
     const { error } = await supabase.from('line_checks').delete().eq('id', row.id)
     if (error) return
-    const files = [row.photo_path, row.voice_path].filter((p): p is string => !!p)
-    if (files.length) await supabase.storage.from('stories').remove(files)
     setRows((prev) => prev.filter((r) => r.id !== row.id))
   }
 
@@ -77,7 +53,7 @@ export default function LineCheckPage({ userId }: { userId: string }) {
     <div className="flex w-full flex-col gap-4 animate-fade-up">
       <div>
         <h2 className="text-2xl font-bold text-ink">🍽️ Line Check</h2>
-        <p className="text-sm text-muted">How long is the line right now? Reports disappear after 1 hour.</p>
+        <p className="text-sm text-muted">How long is the line right now? Reports are anonymous and disappear after 1 hour.</p>
       </div>
 
       {/* One card per place */}
@@ -125,31 +101,24 @@ export default function LineCheckPage({ userId }: { userId: string }) {
         )}
         {shown.map((r) => {
           const info = statusInfo(r.status)
-          const name = r.author.display_name || r.author.username
           return (
-            <div key={r.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-card p-3">
+            <div key={r.id} className="flex flex-col gap-1 rounded-2xl border border-line bg-card p-3">
               <div className="flex items-center gap-2">
-                <Avatar name={name} url={r.author.avatar_url} className="h-8 w-8 text-sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-ink">
-                    <span className="font-semibold">{r.author.username}</span> at <span className="font-semibold">{r.place}</span>
-                  </p>
-                  <p className="text-xs text-muted">{timeAgo(r.created_at)}</p>
-                </div>
                 <span className="rounded-full px-2.5 py-1 text-sm font-bold text-white" style={{ background: info.color }}>
-                  {info.label}
+                  {info.emoji} {info.label}
                 </span>
-                {r.author.id === userId && (
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{r.place}</span>
+                <span className="text-xs text-muted">
+                  {mine.has(r.id) ? 'you · ' : ''}
+                  {timeAgo(r.created_at)}
+                </span>
+                {mine.has(r.id) && (
                   <button onClick={() => remove(r)} aria-label="Delete report" className="px-1 text-muted hover:text-red-500">
                     ✕
                   </button>
                 )}
               </div>
               {r.note && <p className="text-sm text-ink">{r.note}</p>}
-              {r.photo_path && (
-                <img src={fileUrl(r.photo_path)} alt={`Line at ${r.place}`} loading="lazy" className="max-h-80 w-full rounded-xl object-cover" />
-              )}
-              {r.voice_path && r.voice_duration_ms && <VoicePlayer src={fileUrl(r.voice_path)} durationMs={r.voice_duration_ms} />}
             </div>
           )
         })}
@@ -184,70 +153,23 @@ function ReportSheet({
   const [place, setPlace] = useState<string>(defaultPlace ?? PLACES[0])
   const [status, setStatus] = useState<LineStatus | null>(null)
   const [note, setNote] = useState('')
-  const [photo, setPhoto] = useState<File | null>(null)
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
-  const [voice, setVoice] = useState<Recording | null>(null)
-  const [showVoice, setShowVoice] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!photo) return
-    const url = URL.createObjectURL(photo)
-    setPhotoUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [photo])
-
-  function pickPhoto(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    if (!file.type.startsWith('image/')) return setError('Please choose a photo')
-    setError(null)
-    setPhoto(file)
-  }
-
   async function send() {
     if (!status) return
-    if (voice && voice.durationMs > VOICE_MAX_MS) return setError('Keep the voice note under 15 seconds')
     setSending(true)
     setError(null)
-    const uploaded: string[] = []
-    try {
-      let photoPath: string | null = null
-      let voicePath: string | null = null
-      if (photo) {
-        const blob = await makePostImage(photo, 1080)
-        photoPath = `${userId}/lc-${crypto.randomUUID()}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`
-        const { error } = await supabase.storage.from('stories').upload(photoPath, blob, { contentType: blob.type })
-        if (error) throw new Error(error.message)
-        uploaded.push(photoPath)
-      }
-      if (voice) {
-        const type = voice.blob.type.split(';')[0] || 'audio/webm'
-        voicePath = `${userId}/lc-${crypto.randomUUID()}.${audioExt(type)}`
-        const { error } = await supabase.storage.from('stories').upload(voicePath, voice.blob, { contentType: type })
-        if (error) throw new Error(error.message)
-        uploaded.push(voicePath)
-      }
-      const { error } = await supabase.from('line_checks').insert({
-        author_id: userId,
-        place,
-        status,
-        note: note.trim() || null,
-        photo_path: photoPath,
-        voice_path: voicePath,
-        voice_duration_ms: voice ? voice.durationMs : null,
-      })
-      if (error) throw new Error(error.message)
-      track('line_check', { place, status, photo: !!photo, voice: !!voice })
-      onDone()
-    } catch (err) {
-      if (uploaded.length) await supabase.storage.from('stories').remove(uploaded)
-      setError(err instanceof Error ? err.message : 'Could not send')
-    } finally {
-      setSending(false)
-    }
+    const { error } = await supabase.from('line_checks').insert({
+      author_id: userId,
+      place,
+      status,
+      note: note.trim() || null,
+    })
+    setSending(false)
+    if (error) return setError(error.message)
+    track('line_check', { place, status })
+    onDone()
   }
 
   return (
@@ -295,22 +217,7 @@ function ReportSheet({
           placeholder='Add a note (optional) — "pasta bar is open!"'
           className="rounded-lg border border-line bg-page px-3 py-2 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand"
         />
-
-        <div className="flex gap-2">
-          <label className="flex-1 cursor-pointer rounded-full border border-line py-2 text-center text-sm text-ink hover:bg-page">
-            📷 {photo ? 'Change photo' : 'Add photo'}
-            <input type="file" accept="image/*" capture="environment" onChange={pickPhoto} className="sr-only" />
-          </label>
-          <button
-            onClick={() => setShowVoice((v) => !v)}
-            className={`flex-1 rounded-full border py-2 text-sm ${showVoice ? 'border-brand text-brand' : 'border-line text-ink'}`}
-          >
-            🎙️ Voice (15 s)
-          </button>
-        </div>
-        {photoUrl && <img src={photoUrl} alt="Your photo" className="max-h-48 w-full rounded-xl object-cover" />}
-        {showVoice && <VoiceRecorder onChange={setVoice} />}
-        <p className="text-xs text-muted">🙏 Please don't show people's faces. Just the line or the food.</p>
+        <p className="text-xs text-muted">🕶️ Your report is anonymous — nobody sees your name. Please don't mention other people.</p>
 
         {error && <p className="text-sm text-red-500">{error}</p>}
         <button

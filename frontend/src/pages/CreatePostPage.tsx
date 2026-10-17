@@ -11,6 +11,7 @@ import MusicCredit from '../components/MusicCredit'
 import { trackToColumns } from '../lib/music'
 import { checkVideoFile, MAX_SOURCE_MS, readVideo, videoExtension } from '../lib/video'
 import VideoEditor from '../components/VideoEditor'
+import { stripVideoLocation } from '../lib/videoMeta'
 import { compactEdit, DEFAULT_EDIT, editedSeconds, MAX_CLIP_SECONDS } from '../lib/videoEdit'
 import type { VideoEdit } from '../lib/videoEdit'
 import { track } from '../lib/analytics'
@@ -168,7 +169,9 @@ export default function CreatePostPage({ userId }: { userId: string }) {
         if (seconds > MAX_CLIP_SECONDS + 0.05) throw new Error('Clips can be up to 60 seconds. Use ✂️ Trim to shorten it.')
         durationMs = Math.max(1, Math.round(seconds * 1000))
         videoEditColumn = compactEdit(videoEdit, length / 1000)
-        mediaPath = await upload(videoFile, videoFile.type, videoExtension(videoFile.type))
+        // Phones can hide where a video was filmed (GPS) inside the file: remove it first
+        const cleanVideo = await stripVideoLocation(videoFile)
+        mediaPath = await upload(cleanVideo, videoFile.type, videoExtension(videoFile.type))
         posterPath = await upload(poster, poster.type, poster.type === 'image/webp' ? 'webp' : 'jpg')
         posterBlob = poster
         const text = videoCaption.trim()
@@ -286,6 +289,9 @@ export default function CreatePostPage({ userId }: { userId: string }) {
       {isDrop && (
         <p className="rounded-xl bg-brand/10 p-3 text-center text-sm font-medium text-ink">
           ⚡ Campus Drop — show what you're doing right now. No retakes, no filters!
+          <span className="mt-1 block text-xs font-normal text-muted">
+            You don't have to show where you are (no room numbers or addresses), and please ask before filming other people.
+          </span>
         </p>
       )}
 

@@ -179,6 +179,7 @@ export default function GuessSpotPage({ userId }: { userId: string }) {
         </>
       )}
 
+      <p className="text-xs text-muted">🙏 Pick a public spot. No people's faces, dorm windows or room numbers.</p>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button
         onClick={post}
