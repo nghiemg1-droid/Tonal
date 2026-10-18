@@ -84,7 +84,7 @@ export default function VoicePlayer({ src, durationMs, transcript }: Props) {
 
       <audio
         ref={audioRef}
-        src={src}
+        src={src || undefined}
         preload="none"
         onPlay={(e) => {
           e.currentTarget.playbackRate = speed

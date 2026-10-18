@@ -59,7 +59,7 @@ export default function ImageWithSound({ imageUrl, audioUrl, alt }: Props) {
   return (
     <div ref={containerRef} className="relative">
       <img
-        src={imageUrl}
+        src={imageUrl || undefined}
         alt={alt}
         loading="lazy"
         className="max-h-[80vh] w-full bg-page object-cover md:rounded-md"
@@ -81,7 +81,7 @@ export default function ImageWithSound({ imageUrl, audioUrl, alt }: Props) {
 
       <audio
         ref={audioRef}
-        src={audioUrl}
+        src={audioUrl || undefined}
         loop
         preload="none"
         onPlay={() => setPlaying(true)}

@@ -7,6 +7,8 @@ import { encodeCanvas, makePostImage } from '../lib/image'
 import { timeAgo } from '../lib/time'
 import Avatar from './Avatar'
 import VoicePlayer from './VoicePlayer'
+import MediaImg from './MediaImg'
+import { useMediaUrl } from '../lib/media'
 import VoiceRecorder from './VoiceRecorder'
 import type { Recording } from './VoiceRecorder'
 import DrawingPad from './DrawingPad'
@@ -33,9 +35,6 @@ const TEXT_MAX = 300
 const FIELDS =
   'id, kind, body, media_path, duration_ms, transcript, created_at, author:profiles!comments_author_id_fkey(id, username, display_name, avatar_url)'
 
-function fileUrl(path: string) {
-  return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
-}
 
 function audioExtension(mime: string) {
   if (mime.includes('mp4')) return 'm4a'
@@ -235,14 +234,14 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
                         <RichText text={comment.body ?? ''} />
                       </p>
                     ) : comment.kind === 'voice' && comment.media_path ? (
-                      <VoicePlayer
-                        src={fileUrl(comment.media_path)}
+                      <SignedVoice
+                        path={comment.media_path}
                         durationMs={comment.duration_ms ?? 0}
                         transcript={comment.transcript}
                       />
                     ) : comment.media_path ? (
-                      <img
-                        src={fileUrl(comment.media_path)}
+                      <MediaImg
+                        path={comment.media_path}
                         alt={comment.kind === 'drawing' ? `Drawing by ${name}` : `Photo by ${name}`}
                         loading="lazy"
                         className="w-40 rounded-xl border border-line"
@@ -327,4 +326,10 @@ export default function CommentSection({ postId, postAuthorId, userId, onCountCh
       </div>
     </div>
   )
+}
+
+// A voice comment (private file → signed link)
+function SignedVoice({ path, durationMs, transcript }: { path: string; durationMs: number; transcript?: string | null }) {
+  const src = useMediaUrl('posts', path)
+  return <VoicePlayer src={src} durationMs={durationMs} transcript={transcript} />
 }

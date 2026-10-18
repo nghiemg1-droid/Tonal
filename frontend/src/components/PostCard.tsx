@@ -4,6 +4,7 @@ import { columnsToTrack } from '../lib/music'
 import type { MusicColumns } from '../lib/music'
 import MusicCredit from './MusicCredit'
 import VideoPlayer from './VideoPlayer'
+import { useMediaUrl } from '../lib/media'
 import { sanitizeEdit } from '../lib/videoEdit'
 import RichText from './RichText'
 import SharePostDialog from './SharePostDialog'
@@ -49,9 +50,6 @@ export type Post = Partial<MusicColumns> & {
   }
 }
 
-function fileUrl(path: string) {
-  return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
-}
 
 function CommentIcon() {
   return (
@@ -106,7 +104,10 @@ export default function PostCard({
   const { streak } = useMyStreak()
   const canPin = isMine && unlocks(streak?.best ?? 0).pin
   const [pinned, setPinned] = useState(false)
-  const mediaUrl = fileUrl(post.media_path)
+  const mediaUrl = useMediaUrl('posts', post.media_path)
+  const posterUrl = useMediaUrl('posts', post.poster_path)
+  const audioUrl = useMediaUrl('posts', post.audio_path)
+  const captionUrl = useMediaUrl('posts', post.caption_path)
   const name = post.author.display_name || post.author.username
   const music = columnsToTrack(post)
 
@@ -286,7 +287,7 @@ export default function PostCard({
           {post.kind === 'video' ? (
             <VideoPlayer
               src={mediaUrl}
-              poster={post.poster_path ? fileUrl(post.poster_path) : ''}
+              poster={posterUrl}
               className="md:rounded-md"
               edit={sanitizeEdit(post.video_edit)}
               music={music}
@@ -294,13 +295,13 @@ export default function PostCard({
           ) : post.audio_path || music ? (
             <ImageWithSound
               imageUrl={mediaUrl}
-              audioUrl={post.audio_path ? fileUrl(post.audio_path) : (music?.url ?? '')}
+              audioUrl={post.audio_path ? audioUrl : (music?.url ?? '')}
               alt={`Photo by ${name}`}
             />
           ) : (
             <button onClick={() => setFullscreen(true)} className="block w-full" aria-label="View photo full screen">
               <img
-                src={mediaUrl}
+                src={mediaUrl || undefined}
                 alt={`Photo by ${name}`}
                 loading="lazy"
                 className="max-h-[80vh] w-full bg-card object-cover md:rounded-md"
@@ -317,7 +318,7 @@ export default function PostCard({
           role="dialog"
           aria-label="Photo"
         >
-          <img src={mediaUrl} alt={`Photo by ${name}`} className="max-h-full max-w-full object-contain" />
+          <img src={mediaUrl || undefined} alt={`Photo by ${name}`} className="max-h-full max-w-full object-contain" />
           <button
             onClick={() => setFullscreen(false)}
             aria-label="Close"
@@ -402,7 +403,7 @@ export default function PostCard({
       )}
       {post.caption_kind === 'drawing' && post.caption_path && (
         <img
-          src={fileUrl(post.caption_path)}
+          src={captionUrl || undefined}
           alt={`Drawing by ${name}`}
           loading="lazy"
           className="mt-2 w-40 rounded-xl border border-line"
@@ -410,7 +411,7 @@ export default function PostCard({
       )}
       {post.caption_kind === 'voice' && post.caption_path && (
         <div className="mt-2">
-          <VoicePlayer src={fileUrl(post.caption_path)} durationMs={post.caption_duration_ms ?? 0} />
+          <VoicePlayer src={captionUrl} durationMs={post.caption_duration_ms ?? 0} />
         </div>
       )}
 

@@ -18,6 +18,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import ReportDialog from '../components/ReportDialog'
 import ThemePicker from '../components/ThemePicker'
 import StreakBean from '../components/StreakBean'
+import MediaImg from '../components/MediaImg'
 import { getChatTheme } from '../lib/chatThemes'
 import { track } from '../lib/analytics'
 import { blockUser, unblockUser } from '../lib/safety'
@@ -63,17 +64,14 @@ type SharedPost = {
 
 // A post someone shared in the chat (undefined = loading, null = deleted or hidden)
 function SharedPostCard({ post, note, mine }: { post: SharedPost | null | undefined; note: string | null; mine: boolean }) {
-  const thumb =
-    post && post.kind !== 'voice'
-      ? supabase.storage.from('posts').getPublicUrl(post.kind === 'video' ? (post.poster_path ?? '') : post.media_path).data.publicUrl
-      : null
+  const thumb = post && post.kind !== 'voice' ? (post.kind === 'video' ? post.poster_path : post.media_path) : null
   return (
     <div className={`flex w-56 flex-col gap-1 ${mine ? 'items-end' : 'items-start'}`}>
       {post ? (
         <Link to={`/p/${post.id}`} className="w-full overflow-hidden rounded-2xl border border-line bg-card">
           <p className="px-3 py-2 text-xs font-semibold text-ink">@{post.author?.username}</p>
           {thumb ? (
-            <img src={thumb} alt="" className="aspect-square w-full object-cover" />
+            <MediaImg path={thumb} alt="" className="aspect-square w-full object-cover" />
           ) : (
             <div className="flex aspect-[2/1] items-center justify-center bg-brand/15 text-3xl">🎙️</div>
           )}
@@ -898,8 +896,9 @@ export default function ChatPage({ userId }: { userId: string }) {
                   {m.story_id !== undefined && m.story_id !== null && !m.deleted_at && (
                     <div className={`mb-1 flex items-center gap-2 text-xs text-muted ${mine ? 'flex-row-reverse' : ''}`}>
                       {stories[m.story_id] ? (
-                        <img
-                          src={supabase.storage.from('stories').getPublicUrl(stories[m.story_id] as string).data.publicUrl}
+                        <MediaImg
+                          bucket="stories"
+                          path={stories[m.story_id] as string}
                           alt="Story"
                           className="h-20 w-12 rounded-lg object-cover"
                         />

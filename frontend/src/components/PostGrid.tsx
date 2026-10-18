@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { postFileUrl } from '../lib/posts'
+import MediaImg from './MediaImg'
 
 export type GridPost = {
   id: string
@@ -30,8 +30,8 @@ export default function PostGrid({ posts }: { posts: GridPost[] }) {
         >
           {post.kind === 'video' && post.poster_path ? (
             <>
-              <img
-                src={postFileUrl(post.poster_path)}
+              <MediaImg
+                path={post.poster_path}
                 alt=""
                 loading="lazy"
                 className="h-full w-full object-cover transition group-hover:scale-105"
@@ -41,8 +41,8 @@ export default function PostGrid({ posts }: { posts: GridPost[] }) {
               </span>
             </>
           ) : post.kind === 'image' ? (
-            <img
-              src={postFileUrl(post.media_path)}
+            <MediaImg
+              path={post.media_path}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover transition group-hover:scale-105"

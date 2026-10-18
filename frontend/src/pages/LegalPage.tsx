@@ -102,8 +102,17 @@ function Privacy() {
             streak”. Private accounts are never listed in the Hall of Fame.
           </li>
           <li>
-            Files in posts and stories are stored at long, hard-to-guess links. Anyone who is given such a
-            link can open that one file, so think before sharing links outside {APP_NAME}.
+            Photos, videos and voice files in posts and stories are private files. The app opens them with
+            links that expire after a few hours, and only for people allowed to see your posts (everyone for
+            public accounts, approved followers for private ones).
+          </li>
+          <li>
+            If you share a link to a post from a public account, people who aren't on Tonal can see a preview
+            of that one post. Posts from private accounts are never shown this way.
+          </li>
+          <li>
+            <b>Notifications:</b> if you turn them on, we save a technical address for your device (from your
+            browser) to send you notifications. Turn them off anytime on your profile.
           </li>
         </ul>
         <p>

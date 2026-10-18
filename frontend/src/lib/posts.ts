@@ -36,7 +36,3 @@ export async function addLikeInfo(rows: PostRow[], userId: string): Promise<Post
     saved_by_me: savedByMe.has(post.id),
   }))
 }
-
-export function postFileUrl(path: string) {
-  return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
-}

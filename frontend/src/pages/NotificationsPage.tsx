@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { timeAgo } from '../lib/time'
 import Avatar from '../components/Avatar'
+import MediaImg from '../components/MediaImg'
 import { GIFTS } from '../lib/rewards'
 import type { GiftId } from '../lib/rewards'
 
@@ -175,13 +176,8 @@ export default function NotificationsPage({ userId, onSeen }: Props) {
               {item.post && (
                 <Link to={`/p/${item.post.id}`} className="shrink-0">
                 {item.post.kind !== 'voice' ? (
-                  <img
-                    src={
-                      supabase.storage
-                        .from('posts')
-                        .getPublicUrl(item.post.kind === 'video' ? (item.post.poster_path ?? '') : item.post.media_path)
-                        .data.publicUrl
-                    }
+                  <MediaImg
+                    path={item.post.kind === 'video' ? item.post.poster_path : item.post.media_path}
                     alt=""
                     className="h-11 w-11 shrink-0 rounded-md object-cover"
                   />

@@ -10,11 +10,17 @@ import { useEffect, useState } from 'react'
 import ProfileStreak, { useStreakLevel } from '../components/ProfileStreak'
 import PinnedPost from '../components/PinnedPost'
 import StreakBean from '../components/StreakBean'
+import PushToggle from '../components/PushToggle'
 
 export default function ProfilePage({ userId }: { userId: string }) {
   const { posts, hasMore, loadMore, loading } = useGridPosts({ authorId: userId })
   const level = useStreakLevel(userId)
   const [pinnedId, setPinnedId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    supabase.rpc('is_admin').then(({ data }) => setIsAdmin(!!data))
+  }, [])
 
   useEffect(() => {
     supabase
@@ -80,6 +86,15 @@ export default function ProfilePage({ userId }: { userId: string }) {
       </button>
 
       {/* Settings */}
+      <section className="flex w-full max-w-sm flex-col gap-2 rounded-2xl border border-line bg-card p-4">
+        <p className="font-semibold text-ink">Notifications on this device</p>
+        <PushToggle />
+      </section>
+      {isAdmin && (
+        <Link to="/admin" className="w-full max-w-sm rounded-xl border border-line bg-card py-2 text-center text-sm font-medium text-ink hover:bg-page">
+          🛡️ Admin: reports & gifts
+        </Link>
+      )}
       <BlockedAccounts userId={userId} />
       <DeleteAccount userId={userId} />
 

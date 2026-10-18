@@ -47,12 +47,23 @@ export default function VideoPlayer({ src, poster, className = '', fill = false,
   // The clip's own sound is off when the creator turned it down to 0 (phones ignore volume)
   const videoMuted = muted || edit.volume === 0
 
+  const visibleRef = useRef(false)
+
+  // Private files get their link a moment later: start playing once it arrives
+  useEffect(() => {
+    const video = ref.current
+    if (!video || !src || !visibleRef.current) return
+    video.muted = !soundOn || video.volume === 0
+    video.play().catch(() => {})
+  }, [src])
+
   // Play when at least 60% is on screen, pause when it scrolls away
   useEffect(() => {
     const video = ref.current
     if (!video) return
     const observer = new IntersectionObserver(
       ([entry]) => {
+        visibleRef.current = entry.intersectionRatio >= 0.6
         if (entry.intersectionRatio >= 0.6) {
           video.muted = !soundOn || video.volume === 0
           setMuted(!soundOn)
@@ -101,8 +112,8 @@ export default function VideoPlayer({ src, poster, className = '', fill = false,
     <div className={`relative overflow-hidden bg-black ${className}`} style={{ containerType: 'inline-size' }}>
       <video
         ref={ref}
-        src={src}
-        poster={poster}
+        src={src || undefined}
+        poster={poster || undefined}
         playsInline
         muted={videoMuted}
         preload="metadata"

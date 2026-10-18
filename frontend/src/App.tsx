@@ -35,12 +35,27 @@ import InvitePage from './pages/InvitePage'
 import AdminRewardsPage from './pages/AdminRewardsPage'
 import { peekRef, saveRefFromUrl, takeRef } from './lib/rewards'
 import HallOfFamePage from './pages/HallOfFamePage'
+import AdminPage from './pages/AdminPage'
+import PublicPostPage from './pages/PublicPostPage'
+import Onboarding from './components/Onboarding'
+import { CONTACT_EMAIL } from './lib/config'
 
 // Everything a logged-in user sees
 function LoggedInApp({ userId }: { userId: string }) {
   const [unread, setUnread] = useUnreadCount(userId)
   const unreadChats = useUnreadChats(userId)
   const markSeen = useCallback(() => setUnread(0), [setUnread])
+  const [account, setAccount] = useState<{ onboarded: boolean; suspended: boolean } | null>(null)
+
+  // New here? (show the welcome screens) Suspended? (show a notice)
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('onboarded_at, banned_at')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => data && setAccount({ onboarded: !!data.onboarded_at, suspended: !!data.banned_at }))
+  }, [userId])
 
   // Analytics: link events to this account (an id only, never the email)
   useEffect(() => {
@@ -67,6 +82,14 @@ function LoggedInApp({ userId }: { userId: string }) {
     <BrowserRouter>
       <div className="min-h-screen bg-page md:pl-20">
         <NavBar unread={unread} unreadChats={unreadChats} />
+        {account && !account.onboarded && !account.suspended && (
+          <Onboarding userId={userId} onDone={() => setAccount({ ...account, onboarded: true })} />
+        )}
+        {account?.suspended && (
+          <div className="sticky top-0 z-30 bg-red-500 px-4 py-2 text-center text-sm font-medium text-white">
+            Your account is suspended, so you can't post or message. Think this is a mistake? Email {CONTACT_EMAIL}
+          </div>
+        )}
 
         {/* Phone: top bar with the logo and the light/dark switch */}
         <header className="sticky top-0 z-10 flex pt-[env(safe-area-inset-top)] items-center justify-between border-b border-line bg-card px-4 py-1 md:hidden">
@@ -115,6 +138,7 @@ function LoggedInApp({ userId }: { userId: string }) {
               <Route path="/hall" element={<HallOfFamePage />} />
               <Route path="/invite" element={<InvitePage userId={userId} />} />
               <Route path="/admin/rewards" element={<AdminRewardsPage />} />
+              <Route path="/admin" element={<AdminPage />} />
               <Route path="/join" element={<Navigate to="/" replace />} />
               <Route path="/tags/:tag" element={<TagPage />} />
               <Route path="/saved" element={<SavedPage userId={userId} />} />
@@ -183,16 +207,18 @@ function App() {
     }
   }
 
-  // Logged out: welcome + login form
+  // Logged out: welcome + login form (+ a preview if they opened a shared post link)
   if (!session) {
+    const sharedPostId = window.location.pathname.match(/^\/p\/([0-9a-f-]{36})/)?.[1] ?? null
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center gap-6 bg-page px-4">
+      <main className={`min-h-screen flex flex-col items-center gap-6 bg-page px-4 ${sharedPostId ? 'py-10' : 'justify-center'}`}>
         <ThemeToggle className="fixed top-4 right-4" />
         <Logo className="h-16 w-16 animate-fade-up" />
         <h1 className="text-5xl font-bold tracking-tight text-ink animate-fade-up">
           Welcome to <span className="text-brand">Tonal</span>
         </h1>
         {invitedBy && <p className="-mt-2 text-sm text-muted animate-fade-up">🎉 @{invitedBy} invited you</p>}
+        {sharedPostId && <PublicPostPage postId={sharedPostId} />}
         <AuthForm />
         <LoginTroubleshooting />
       </main>

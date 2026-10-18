@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import type { UIEvent } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { supabase } from '../lib/supabase'
-import { addLikeInfo, POST_FIELDS, postFileUrl } from '../lib/posts'
+import { addLikeInfo, POST_FIELDS } from '../lib/posts'
+import { useMediaUrl } from '../lib/media'
 import type { PostRow } from '../lib/posts'
 import type { Post } from '../components/PostCard'
 import Avatar from '../components/Avatar'
@@ -16,6 +17,13 @@ import { columnsToTrack } from '../lib/music'
 import { sanitizeEdit } from '../lib/videoEdit'
 
 const PAGE = 8
+
+// One full-screen clip (its private file gets a signed link first)
+function ClipVideo({ clip, music }: { clip: Post; music: ReturnType<typeof columnsToTrack> }) {
+  const src = useMediaUrl('posts', clip.media_path)
+  const poster = useMediaUrl('posts', clip.poster_path)
+  return <VideoPlayer src={src} poster={poster} fill className="h-full w-full" edit={sanitizeEdit(clip.video_edit)} music={music} />
+}
 
 // Full-screen vertical feed of short videos from everyone (swipe / scroll to the next one)
 export default function ClipsPage({ userId }: { userId: string }) {
@@ -89,14 +97,7 @@ export default function ClipsPage({ userId }: { userId: string }) {
         const music = columnsToTrack(clip)
         return (
           <section key={clip.id} className="relative mx-auto h-full w-full max-w-[470px] snap-start snap-always">
-            <VideoPlayer
-              src={postFileUrl(clip.media_path)}
-              poster={clip.poster_path ? postFileUrl(clip.poster_path) : ''}
-              fill
-              className="h-full w-full"
-              edit={sanitizeEdit(clip.video_edit)}
-              music={music}
-            />
+            <ClipVideo clip={clip} music={music} />
 
             {/* Who posted it + caption */}
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4 pr-20 text-white">

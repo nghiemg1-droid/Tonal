@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { supabase } from '../lib/supabase'
-import { postFileUrl } from '../lib/posts'
+import MediaImg from './MediaImg'
 
 type Clip = {
   id: string
@@ -56,7 +56,7 @@ export default function ClipsRow() {
               className="relative aspect-[9/16] w-28 shrink-0 overflow-hidden rounded-xl bg-black"
             >
               {clip.poster_path && (
-                <img src={postFileUrl(clip.poster_path)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                <MediaImg path={clip.poster_path} alt="" loading="lazy" className="h-full w-full object-cover" />
               )}
               <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5 text-xs font-semibold text-white">
                 ▶ {clip.author?.username}

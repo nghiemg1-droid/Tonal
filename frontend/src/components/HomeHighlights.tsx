@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import StreakCard from './StreakCard'
+import PushToggle from './PushToggle'
+import { pushState } from '../lib/push'
 import { supabase } from '../lib/supabase'
 import { dropState, formatClock } from '../lib/campusDrop'
 import type { DropState } from '../lib/campusDrop'
@@ -12,6 +14,7 @@ export default function HomeHighlights() {
   return (
     <div className="flex w-full flex-col gap-2">
       <StreakCard />
+      <PushNudge />
       <CampusDropBanner />
       <LineCheckStrip />
     </div>
@@ -104,6 +107,44 @@ function LineCheckStrip() {
       <Link to="/invite" className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-card px-3 py-1.5 text-sm font-semibold text-ink">
         🎁 Invite & win merch
       </Link>
+    </div>
+  )
+}
+
+const NUDGE_KEY = 'tonal-push-nudge-dismissed'
+
+// "Turn on notifications" card, until it's on (or dismissed)
+function PushNudge() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    let dismissed = false
+    try {
+      dismissed = localStorage.getItem(NUDGE_KEY) === '1'
+    } catch {
+      // ignore
+    }
+    if (dismissed) return
+    pushState().then((s) => setShow(s === 'off' || s === 'install')).catch(() => {})
+  }, [])
+  if (!show) return null
+  return (
+    <div className="relative flex flex-col gap-2 rounded-2xl border border-line bg-card px-4 py-3">
+      <button
+        onClick={() => {
+          try {
+            localStorage.setItem(NUDGE_KEY, '1')
+          } catch {
+            // ignore
+          }
+          setShow(false)
+        }}
+        aria-label="Dismiss"
+        className="absolute top-2 right-3 text-muted"
+      >
+        ✕
+      </button>
+      <p className="pr-6 text-sm font-semibold text-ink">🔔 Get a ping when Campus Drop starts, and when friends message you</p>
+      <PushToggle compact onChange={(s) => s === 'on' && setShow(false)} />
     </div>
   )
 }

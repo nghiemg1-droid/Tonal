@@ -10,6 +10,7 @@ import { startChat } from '../lib/chat'
 import { sanitizeEdit, filterCss } from '../lib/videoEdit'
 import { useEditedVideo } from '../hooks/useEditedVideo'
 import { VideoTextOverlay } from './VideoPlayer'
+import { useMediaUrl } from '../lib/media'
 
 const QUICK_REACTIONS = ['😂', '😮', '😍', '😢', '👏', '🔥']
 
@@ -54,20 +55,14 @@ function storyDuration(story: Story) {
   return DURATION
 }
 
-function storyFileUrl(path: string) {
-  return supabase.storage.from('stories').getPublicUrl(path).data.publicUrl
-}
-
-function postFileUrl(path: string) {
-  return supabase.storage.from('posts').getPublicUrl(path).data.publicUrl
-}
-
 // Plays a clip inside a story, with the creator's edits and music
 function ClipStory({ post, paused, muted }: { post: NonNullable<Story['post']>; paused: boolean; muted: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const edit = sanitizeEdit(post.video_edit)
   const music = columnsToTrack(post)
+  const videoUrl = useMediaUrl('posts', post.media_path)
+  const posterUrl = useMediaUrl('posts', post.poster_path)
   useEditedVideo(videoRef, musicRef, edit)
 
   useEffect(() => {
@@ -82,14 +77,14 @@ function ClipStory({ post, paused, muted }: { post: NonNullable<Story['post']>; 
       video.muted = true
       video.play().catch(() => {})
     })
-  }, [paused, muted])
+  }, [paused, muted, videoUrl])
 
   return (
     <div className="absolute inset-0" style={{ containerType: 'inline-size' }}>
       <video
         ref={videoRef}
-        src={postFileUrl(post.media_path)}
-        poster={post.poster_path ? postFileUrl(post.poster_path) : undefined}
+        src={videoUrl || undefined}
+        poster={posterUrl || undefined}
         playsInline
         muted={muted || edit.volume === 0}
         preload="auto"
@@ -134,7 +129,9 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen,
   const [muted, setMuted] = useState(false)
   const music = story ? (story.post ? columnsToTrack(story.post) : columnsToTrack(story)) : null
   // Clip stories play their own sound (see ClipStory)
-  const soundUrl = story?.post ? null : story?.audio_path ? storyFileUrl(story.audio_path) : (music?.url ?? null)
+  const imageUrl = useMediaUrl('stories', story?.media_path)
+  const voiceUrl = useMediaUrl('stories', story?.audio_path)
+  const soundUrl = story?.post ? null : story?.audio_path ? voiceUrl || null : (music?.url ?? null)
 
   function goTo(next: number) {
     elapsedRef.current = 0
@@ -298,7 +295,7 @@ export default function StoryViewer({ group, isMine, onClose, onDeleted, onSeen,
           <ClipStory key={story.id} post={story.post} paused={paused} muted={muted} />
         ) : (
           <img
-            src={storyFileUrl(story.media_path)}
+            src={imageUrl || undefined}
             alt={`Story by ${name}`}
             className="h-full w-full object-contain"
           />
