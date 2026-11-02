@@ -6,6 +6,10 @@ A social app built around **voice, photos, short videos and drawings**. Share a 
 
 **Live app: [tonal-six.vercel.app](https://tonal-six.vercel.app)** — installable on phones as a web app (PWA).
 
+
+https://github.com/user-attachments/assets/93cf0645-3233-41a9-a09b-73199ff0ea45
+
+
 ## Features
 
 **Posts, clips and feed**
